@@ -1,5 +1,5 @@
 ###############################################################################
-# Study Name           : UK Migraine
+# Study Name           : DE Migraine
 # Study ID             : 25P01
 # Study Folder Path    : /organon/projects/or_analytics/irvinery/01_projects/
 #                          25P01_THIN_Migraine_Headache/
@@ -8,7 +8,7 @@
 # Date of Creation     : 2025-11-14
 #
 # Program Inputs       : None
-# Program Outputs      : "data/diagnosis_codelist", "data/referral_codelist"
+# Program Outputs      : "data/diagnosis_codelist", "data/rx_codelist"
 #
 ###############################################################################
 #                          REVISION / VERSION HISTORY                         #
@@ -58,7 +58,7 @@ if (!exists("con")) {
 StartDate <- as.Date("2016-12-01")
 StartDate_sql <- "TO_DATE('2016-12-01')"
 data_path <- "../data"
-output_path <- "../output"
+rawresults_path <- "../rawresults"
 results_path <- "../results"
 
 # Helpter functions ----
@@ -76,7 +76,10 @@ source_all <- function(folder_path, pattern = "\\.R$") {
 source_all("functions")
 
 # Load data from Snowflake ----
-codelist <- tbl(con, I("ORD_IDMT.ORD_CEGEDIM_PUB.V_UK_CODELIST")) |>
+# NOTE (DE port): view names carry the DE country token (V_DE_*) in the same
+# schema as the UK study. Verify each name against information_schema on the
+# analysis machine before the first run.
+codelist <- tbl(con, I("ORD_IDMT.ORD_CEGEDIM_PUB.V_DE_CODELIST")) |>
   rename_all(tolower) |>
   select(
     -job_id,
@@ -86,7 +89,7 @@ codelist <- tbl(con, I("ORD_IDMT.ORD_CEGEDIM_PUB.V_UK_CODELIST")) |>
   )
 codelist_translate <- tbl(
   con,
-  I("ORD_IDMT.ORD_CEGEDIM_PUB.V_UK_CODELIST")
+  I("ORD_IDMT.ORD_CEGEDIM_PUB.V_DE_CODELIST_TRANSLATE")
 ) |>
   rename_all(tolower) |>
   select(
@@ -95,7 +98,7 @@ codelist_translate <- tbl(
     -updated_date,
     -status_code
   )
-person <- tbl(con, I("ORD_IDMT.ORD_CEGEDIM_PUB.V_UK_PERSON")) |>
+person <- tbl(con, I("ORD_IDMT.ORD_CEGEDIM_PUB.V_DE_PERSON")) |>
   rename_all(tolower) |>
   select(
     -job_id,
@@ -105,18 +108,7 @@ person <- tbl(con, I("ORD_IDMT.ORD_CEGEDIM_PUB.V_UK_PERSON")) |>
   )
 contact_diagnostics <- tbl(
   con,
-  I("ORD_IDMT.ORD_CEGEDIM_PUB.V_UK_CONTACT_DIAGNOSTICS")
-) |>
-  rename_all(tolower) |>
-  select(
-    -job_id,
-    -created_date,
-    -updated_date,
-    -status_code
-  )
-referral <- tbl(
-  con,
-  I("ORD_IDMT.ORD_CEGEDIM_PUB.V_UK_UK_REFERRAL")
+  I("ORD_IDMT.ORD_CEGEDIM_PUB.V_DE_CONTACT_DIAGNOSTICS")
 ) |>
   rename_all(tolower) |>
   select(
@@ -127,7 +119,30 @@ referral <- tbl(
   )
 contact <- tbl(
   con,
-  I("ORD_IDMT.ORD_CEGEDIM_PUB.V_UK_CONTACT")
+  I("ORD_IDMT.ORD_CEGEDIM_PUB.V_DE_CONTACT")
+) |>
+  rename_all(tolower) |>
+  select(
+    -job_id,
+    -created_date,
+    -updated_date,
+    -status_code
+  )
+# Prescription source for the DE-specific N02 objective (08_rx.R).
+contact_prescriptions <- tbl(
+  con,
+  I("ORD_IDMT.ORD_CEGEDIM_PUB.V_DE_CONTACT_PRESCRIPTIONS")
+) |>
+  rename_all(tolower) |>
+  select(
+    -job_id,
+    -created_date,
+    -updated_date,
+    -status_code
+  )
+product <- tbl(
+  con,
+  I("ORD_IDMT.ORD_CEGEDIM_PUB.V_DE_PRODUCT")
 ) |>
   rename_all(tolower) |>
   select(
@@ -140,17 +155,27 @@ contact <- tbl(
 
 # Create study codelist(s) ----
 ## Diagnosis Codelist ----
+# DE port: codes are ICD-10 (CIM-10) natively, so the UK Read-code hardcoding
+# (INUK.* -> "Headache"/"R51") is dropped. `code` holds the ICD-10 code and
+# `code_group` its chapter grouping. The G43/G44/R51 code_group logic and the
+# label exclusions carry over from the UK program.
+# NOTE: confirm the DE list_code value for the ICD-10 group. The DE data
+# dictionary describes list_code values including "cim10_code"; verify against
+# the codelist on the analysis machine (UK used "diagnostic_code").
+dx_list_code <- "cim10_code"
 diagnosis_codelist <- codelist |>
   mutate(label = tolower(label)) |>
   filter(
-    list_code == "diagnostic_code",
+    list_code == dx_list_code,
     (
       # keep NA code_group if label matches
       str_detect(coalesce(code_group, ""), "G43") |
         str_detect(coalesce(code_group, ""), "G44") |
         str_detect(coalesce(code_group, ""), "R51") |
         str_detect(label, "migraine") |
-        str_detect(label, "headache")
+        str_detect(label, "headache") |
+        str_detect(label, "kopfschmerz") |
+        str_detect(label, "migräne")
     ),
     !str_detect(label, "history"),
     !str_detect(label, "h/o"),
@@ -175,266 +200,33 @@ diagnosis_codelist <- codelist |>
     icd10_label = label,
     icd10_code = code_group
   ) |>
-  mutate(
-    icd10_label = ifelse(
-      code %in%
-        c(
-          "INUK.1B1G.00",
-          "INUK.1B1G.11",
-          "INUK.1BA..00",
-          "INUK.1BB..00",
-          "INUK.1BA9.00",
-          "INUK.1B1G000",
-          "INUK.1BA2.00",
-          "INUK.1BA3.00",
-          "INUK.1BA4.00",
-          "INUK.1BA5.00",
-          "INUK.1BA6.00",
-          "INUK.1BA7.00",
-          "INUK.1BA8.00",
-          "INUK.1BB1.00",
-          "INUK.1BB2.00",
-          "INUK.1BB3.00",
-          "INUK.1BB4.00",
-          "INUK.E278200",
-          "INUK.E278111",
-          "INUK.E278100",
-          "INUK.F261100",
-          "INUK.R040z11",
-          "INUK.R040011",
-          "INUK.R040000",
-          "INUK.R040.00"
-        ),
-      "Headache",
-      icd10_label
-    ),
-    icd10_code = ifelse(
-      code %in%
-        c(
-          "INUK.1B1G.00",
-          "INUK.1B1G.11",
-          "INUK.1BA..00",
-          "INUK.1BB..00",
-          "INUK.1BA9.00",
-          "INUK.1B1G000",
-          "INUK.1BA2.00",
-          "INUK.1BA3.00",
-          "INUK.1BA4.00",
-          "INUK.1BA5.00",
-          "INUK.1BA6.00",
-          "INUK.1BA7.00",
-          "INUK.1BA8.00",
-          "INUK.1BB1.00",
-          "INUK.1BB2.00",
-          "INUK.1BB3.00",
-          "INUK.1BB4.00",
-          "INUK.E278200",
-          "INUK.E278111",
-          "INUK.E278100",
-          "INUK.F261100",
-          "INUK.R040z11",
-          "INUK.R040011",
-          "INUK.R040000",
-          "INUK.R040.00"
-        ),
-      "R51",
-      icd10_code
-    )
-  ) |>
   mutate(label_fmt = paste0(icd10_code, ": ", icd10_label)) |>
   select(-icd10_label, -icd10_code) |>
   collect()
 saveRDS(diagnosis_codelist, file = "../data/diagnosis_codelist")
 print("diagnosis_codelist has been created and saved to data directory.")
 
-## Referral codelist ----
-referral_codelist <- codelist |>
-  filter(list_code == "diagnostic_code") |>
-  select(code, label) |>
-  filter(
-    str_detect(tolower(label), "refer") &
-      !str_detect(tolower(label), "child") &
-      !str_detect(tolower(label), "decline") &
-      !str_detect(tolower(label), "defer") &
-      !str_detect(tolower(label), "prefer") &
-      !str_detect(tolower(label), "non-refer") &
-      !str_detect(tolower(label), "exam.") &
-      !str_detect(tolower(label), "reference") &
-      !str_detect(tolower(label), "fh")
-  ) |>
+## Prescription (ATC) codelist ----
+# DE-specific objective: count prescriptions in ATC group N02 (analgesics),
+# with particular interest in N02C (antimigraine preparations). The list is
+# built from the product master (product_atc_code), one row per distinct ATC
+# code under N02, so 08_rx.R can label counts with the drug name.
+rx_codelist <- product |>
+  mutate(product_atc_code = toupper(product_atc_code)) |>
+  filter(str_detect(coalesce(product_atc_code, ""), "^N02")) |>
   mutate(
-    specialty = case_when(
-      # Neurology
-      grepl(
-        "neurolog|\\bneuro\\b|neurosurg|parkinson|epileps|headache|clinical neurophysiolog",
-        label,
-        TRUE
-      ) ~ "Neurology",
-
-      # Cardiology
-      grepl(
-        "cardiolog|cardiac|heart|atrial fibrillation|device service|echocardiogram|electrocardiogram|angina|cardiothoracic",
-        label,
-        TRUE
-      ) ~ "Cardiology",
-
-      # Oncology
-      grepl(
-        "oncolog|cancer|sarcoma|radiotherap|chemotherap|haematology malignancy",
-        label,
-        TRUE
-      ) ~ "Oncology",
-
-      # Psychiatry / Mental Health
-      grepl(
-        "psychiatr|psycholog|mental|psychosis|cognitive behavioural|iapt|psychotherapist|psychosexual|forensic psychiatrist|psychogeriatric",
-        label,
-        TRUE
-      ) ~ "Psychiatry / Mental Health",
-
-      # Surgery
-      grepl(
-        "surgeon|surgical|surgery|maxillofacial|colorectal|vascular|thoracic|hand surgeon|bariatric|orthopaedic triage",
-        label,
-        TRUE
-      ) ~ "Surgery",
-
-      # Nursing
-      grepl("nurse|midwife|matron|stoma", label, TRUE) ~ "Nursing",
-
-      # Paediatrics
-      grepl(
-        "paediatr|neonatolog|school nurse|child",
-        label,
-        TRUE
-      ) ~ "Paediatrics",
-
-      # Obstetrics & Gynaecology
-      grepl(
-        "gynaecolog|obstetric|u\\s*gynaecolog|family planning|antenatal|postnatal|fertilit|female sterilisation|hysteroscopy",
-        label,
-        TRUE
-      ) ~ "Obstetrics & Gynaecology",
-
-      # Dermatology
-      grepl(
-        "dermatolog|eczema|skin|teledermatology|patch skin test",
-        label,
-        TRUE
-      ) ~ "Dermatology",
-
-      # Radiology
-      grepl(
-        "radiolog|radiograph|imaging|interventional radiology|radiographer|dxa",
-        label,
-        TRUE
-      ) ~ "Radiology",
-
-      # Respiratory
-      grepl(
-        "respiratory|chest|lung|spirom|bronchoscopy|pulmonary|tb|copd|sleep clinic",
-        label,
-        TRUE
-      ) ~ "Respiratory",
-
-      # Endocrinology
-      grepl(
-        "endocrinolog|diabet|thyroid|lipid|hypercholesterolaemia|glucose",
-        label,
-        TRUE
-      ) ~ "Endocrinology",
-
-      # Gastroenterology
-      grepl(
-        "gastroenterolog|dyspeps|colonoscopy|endosc|sigmoidoscopy|rectal|\\bgi\\b",
-        label,
-        TRUE
-      ) ~ "Gastroenterology",
-
-      # Hepatology
-      grepl("hepat|liver", label, TRUE) ~ "Hepatology",
-
-      # Urology
-      grepl("urolog|haematuria", label, TRUE) ~ "Urology",
-
-      # Orthopaedics
-      grepl(
-        "orthopaed|musculoskeletal|bone|fracture|osteoporosis|varicose vein|falls service|bone density",
-        label,
-        TRUE
-      ) ~ "Orthopaedics",
-
-      # Genetics
-      grepl(
-        "genetic|geneticist|cytogenetic|molecular genetic",
-        label,
-        TRUE
-      ) ~ "Genetics",
-
-      # Haematology
-      grepl(
-        "haematolog|blood pressure monitoring",
-        label,
-        TRUE
-      ) ~ "Haematology",
-
-      # Nephrology
-      grepl("renal|nephrolog|kidney", label, TRUE) ~ "Nephrology",
-
-      # Ophthalmology
-      grepl(
-        "ophthalmolog|eye|glaucoma|diabetic eye|optometrist|ophthalmologist|orthoptist",
-        label,
-        TRUE
-      ) ~ "Ophthalmology",
-
-      # ENT
-      grepl("\\bent\\b|ear|nose|throat", label, TRUE) ~ "ENT",
-
-      # Audiology
-      grepl(
-        "audiolog|hearing aid|hearing therapist",
-        label,
-        TRUE
-      ) ~ "Audiology",
-
-      # Dentistry
-      grepl(
-        "dent(al)?|orthodont|oral (dentist|surgery)|prosthodont|periodont",
-        label,
-        TRUE
-      ) ~ "Dentistry",
-
-      # Dietetics / Nutrition
-      grepl(
-        "dietiti|nutrition|obesity|weight management|dietician",
-        label,
-        TRUE
-      ) ~ "Dietetics / Nutrition",
-
-      # Therapy & Rehab (Physio / OT / SLT)
-      grepl(
-        "physiotherap|rehabilitation|occupational therapist|orthotist|speech and language|macmillan physiotherapist|wheelchair",
-        label,
-        TRUE
-      ) ~ "Physiotherapy / Rehabilitation",
-
-      # Social Care / Counselling
-      grepl(
-        "social services|social worker|safeguarding|carer|housing|domestic violence|social prescribing|community navigator|family nurse partnership|age uk|alzheimer",
-        label,
-        TRUE
-      ) ~ "Social Care / Counselling",
-
-      TRUE ~ "Other / General"
-    ),
-    neuro_ref = as.character(ifelse(
-      str_detect(tolower(label), "neuro"),
-      1,
-      2
-    ))
+    atc_subgroup = substr(product_atc_code, 1, 4),
+    is_antimigraine = ifelse(atc_subgroup == "N02C", 1L, 0L)
+  ) |>
+  select(
+    product_id,
+    product_atc_code,
+    atc_subgroup,
+    is_antimigraine,
+    short_name,
+    long_name,
+    product_molecule_code
   ) |>
   collect()
-
-saveRDS(referral_codelist, "../data/referral_codelist")
-print("referral_codelise has been created and saved to data directory.")
+saveRDS(rx_codelist, "../data/rx_codelist")
+print("rx_codelist has been created and saved to data directory.")

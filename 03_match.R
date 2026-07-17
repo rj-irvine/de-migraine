@@ -1,5 +1,5 @@
 ###############################################################################
-# Study Name           : UK Migraine
+# Study Name           : DE Migraine
 # Study ID             : 25P01
 # Study Folder Path    : /organon/projects/or_analytics/irvinery/01_projects/
 #                          25P01_THIN_Migraine_Headache/
@@ -7,8 +7,8 @@
 # Lead Programmer      : Ryan Irvine, CDS
 # Date of Creation     : 2025-11-17
 #
-# Program Inputs       :
-# Program Outputs      : "data/patpop_matched", "data/table0"
+# Program Inputs       : "data/table1_1" (via 01), plus lazy cohorts from 01/02
+# Program Outputs      : "data/patpop_matched", "data/table1"
 #
 ###############################################################################
 #                          REVISION / VERSION HISTORY                         #
@@ -20,8 +20,12 @@
 # 1.0
 ################################################################################
 
-# Step 1. Run global program ----
-source("00_global.R")
+# Step 1. Build cohorts ----
+# Source 01 and 02 (each of which sources 00_global.R) so that patpop_cohort1
+# and patpop_cohort2 exist as live lazy Snowflake tbls and the matching join is
+# pushed down to the database.
+source("01_patpop_cohort1.R")
+source("02_patpop_cohort2.R")
 
 # Step 2. Load cohort data and assign to study (headache disorder) and ----
 # control (no headache disorder). Create range variables as needed.
@@ -90,7 +94,7 @@ table1 <- readRDS("../data/table1_1") |>
   union_all(
     data.frame(
       label = c(
-        "4. Patients in step 3 who are matched with a patient (1:1) having no history of headache disorder diagnoses (matched on year of birth, gender, site_id)."
+        "5. Patients in step 4 who are matched with a patient (1:1) having no history of headache disorder diagnoses (matched on year of birth, gender, site_id)."
       ),
       value = c(
         patpop_matched |>
