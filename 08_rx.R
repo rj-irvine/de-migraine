@@ -41,7 +41,10 @@ n02_product_ids <- as.character(rx_codelist$product_id)
 # Step 3. All N02 prescription lines with their contact date ----
 # Prescription lines live on contact_prescriptions (contact_id, product_id);
 # the prescribing date comes from the parent contact (start_date). Restrict to
-# N02 products up front so only the relevant lines are carried forward.
+# N02 products up front so only the relevant lines are carried forward, then
+# collect() locally. The filter to N02 products keeps this collection small, and
+# collecting means nothing is written back to Snowflake (no copy = TRUE, which
+# would require temp-table write privileges we do not have).
 rx_lines <- contact_prescriptions |>
   select(contact_id, product_id) |>
   filter(product_id %in% local(n02_product_ids)) |>
@@ -50,13 +53,14 @@ rx_lines <- contact_prescriptions |>
       select(contact_id, person_id, event_date = start_date),
     by = "contact_id"
   ) |>
-  filter(!is.na(person_id) & !is.na(event_date) & event_date >= StartDate)
+  filter(!is.na(person_id) & !is.na(event_date) & event_date >= StartDate) |>
+  collect()
 
 # Step 4. Attach each arm's follow-up window, keep in-window lines ----
 # Both arms use the case-defined window (index_date, censor_date), matching how
 # cov1/cov2/cov3 compare the matched pair over the same interval. patpop_matched
-# is a local data frame; build one long table of (person_id, cohort, window) and
-# push it into Snowflake (copy = TRUE) so the join to rx_lines runs in-database.
+# is a local data frame and rx_lines is now local, so the join and window filter
+# run in-memory in R -- no data is copied to Snowflake.
 match_windows <- bind_rows(
   patpop_matched |>
     transmute(person_id = person_id_case, cohort = "case", index_date, censor_date),
@@ -65,9 +69,8 @@ match_windows <- bind_rows(
 )
 
 rx_obs <- rx_lines |>
-  inner_join(match_windows, by = "person_id", copy = TRUE) |>
+  inner_join(match_windows, by = "person_id", relationship = "many-to-many") |>
   filter(event_date > index_date & event_date <= censor_date) |>
-  collect() |>
   # Attach ATC classification from the (local) product master.
   left_join(
     rx_codelist |>
