@@ -127,7 +127,7 @@ wb <- createWorkbook()
 modifyBaseFont(wb, fontName = "Calibri", fontSize = 11)
 
 # Table 1. Patient Attrition Flow ----
-table1_fmt <- readRDS("../data/table1") |>
+table1_fmt <- readRDS("data/table1") |>
   rename(Step = label, N = value)
 
 write_styled_table(
@@ -140,7 +140,7 @@ write_styled_table(
 )
 
 # Table 2. N02 Prescription Counts (DE-specific objective) ----
-cov4 <- readRDS("../data/cov4") |>
+cov4 <- readRDS("data/cov4") |>
   rename(Measure = name, Case = case, Control = control)
 
 write_styled_table(
@@ -152,7 +152,7 @@ write_styled_table(
 )
 
 # Appendix 1. Diagnosis Codelist ----
-diag_cl <- readRDS("../data/diagnosis_codelist")
+diag_cl <- readRDS("data/diagnosis_codelist")
 write_styled_table(
   wb,
   sheet = "A1. Diagnosis Codelist",
@@ -161,7 +161,7 @@ write_styled_table(
 )
 
 # Appendix 2. N02 Prescription (ATC) Codelist ----
-rx_cl <- readRDS("../data/rx_codelist")
+rx_cl <- readRDS("data/rx_codelist")
 write_styled_table(
   wb,
   sheet = "A2. N02 ATC Codelist",
@@ -170,5 +170,5 @@ write_styled_table(
 )
 
 # Save workbook ----
-saveWorkbook(wb, "../results/de_migraine_tables.xlsx", overwrite = TRUE)
+saveWorkbook(wb, "results/de_migraine_tables.xlsx", overwrite = TRUE)
 print("de_migraine_tables.xlsx has been written to the results directory.")

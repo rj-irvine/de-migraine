@@ -28,11 +28,11 @@ wb <- createWorkbook()
 
 # Appendix 1. Diagnosis Codelist ----
 addWorksheet(wb, "A1. Diagnosis Codelist")
-writeData(wb, "A1. Diagnosis Codelist", readRDS("../data/diagnosis_codelist"))
+writeData(wb, "A1. Diagnosis Codelist", readRDS("data/diagnosis_codelist"))
 
 # Appendix 2. Referral Codelist ----
 addWorksheet(wb, "A2. Referral Codelist")
-writeData(wb, "A2. Referral Codelist", readRDS("../data/referral_codelist"))
+writeData(wb, "A2. Referral Codelist", readRDS("data/referral_codelist"))
 
 # Close output destination ----
-saveWorkbook(wb, "../output/euroboard_migraine_appendix.xlsx", overwrite = TRUE)
+saveWorkbook(wb, "output/euroboard_migraine_appendix.xlsx", overwrite = TRUE)

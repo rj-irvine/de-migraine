@@ -180,4 +180,4 @@ table1_1 <- data.frame(
   )
 )
 
-saveRDS(table1_1, "../data/table1_1")
+saveRDS(table1_1, "data/table1_1")

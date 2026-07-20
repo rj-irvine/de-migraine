@@ -57,9 +57,9 @@ if (!exists("con")) {
 # Global variables ----
 StartDate <- as.Date("2016-12-01")
 StartDate_sql <- "TO_DATE('2016-12-01')"
-data_path <- "../data"
-rawresults_path <- "../rawresults"
-results_path <- "../results"
+data_path <- "data"
+rawresults_path <- "rawresults"
+results_path <- "results"
 
 # Helpter functions ----
 source_all <- function(folder_path, pattern = "\\.R$") {
@@ -203,7 +203,7 @@ diagnosis_codelist <- codelist |>
   mutate(label_fmt = paste0(icd10_code, ": ", icd10_label)) |>
   select(-icd10_label, -icd10_code) |>
   collect()
-saveRDS(diagnosis_codelist, file = "../data/diagnosis_codelist")
+saveRDS(diagnosis_codelist, file = "data/diagnosis_codelist")
 print("diagnosis_codelist has been created and saved to data directory.")
 
 ## Prescription (ATC) codelist ----
@@ -228,5 +228,5 @@ rx_codelist <- product |>
     product_molecule_code
   ) |>
   collect()
-saveRDS(rx_codelist, "../data/rx_codelist")
+saveRDS(rx_codelist, "data/rx_codelist")
 print("rx_codelist has been created and saved to data directory.")

@@ -32,8 +32,8 @@
 source("00_global.R")
 
 # Step 2. Load inputs ----
-patpop_matched <- readRDS("../data/patpop_matched")
-rx_codelist <- readRDS("../data/rx_codelist")
+patpop_matched <- readRDS("data/patpop_matched")
+rx_codelist <- readRDS("data/rx_codelist")
 
 # N02 product ids, pushed into Snowflake for the prescription filter.
 n02_product_ids <- as.character(rx_codelist$product_id)
@@ -152,5 +152,5 @@ cov4 <- data.frame(
   union_all(cov4_1) |>
   union_all(cov4_2)
 
-saveRDS(cov4, file = "../data/cov4")
+saveRDS(cov4, file = "data/cov4")
 print("cov4 (N02 prescription counts) has been created and saved to data directory.")

@@ -24,7 +24,7 @@
 source("00_global.R")
 
 # Step 2. Load patpop_matched
-patpop_matched <- readRDS("../data/patpop_matched")
+patpop_matched <- readRDS("data/patpop_matched")
 
 # Step 3. Get all observations for population of interest ----
 temp <- contact |>
@@ -126,7 +126,7 @@ cov1_2 <- summarize_var(
 gp_visit_annual <- gp_visit_all |>
   mutate(n_visit_annual = (n_visit / as.numeric(followup_days)) * 365.25)
 
-saveRDS(gp_visit_annual, "../data/gp_visit_annual")
+saveRDS(gp_visit_annual, "data/gp_visit_annual")
 
 cov1_3 <- summarize_var(
   data = gp_visit_annual,
@@ -154,4 +154,4 @@ cov1 <- data.frame(
   union_all(cov1_2) |>
   union_all(cov1_3)
 
-saveRDS(cov1, file = "../data/cov1")
+saveRDS(cov1, file = "data/cov1")

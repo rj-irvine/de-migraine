@@ -24,7 +24,7 @@
 source("00_global.R")
 
 # Step 2. Load patpop_matched
-patpop_matched <- readRDS("../data/patpop_matched")
+patpop_matched <- readRDS("data/patpop_matched")
 
 # Step 3. Get all referrals for population ----
 ref_case <- patpop_matched |>
@@ -166,7 +166,7 @@ cov2_3_full <- temp |>
   ) |>
   arrange(desc(order))
 
-saveRDS(cov2_3_full, "../data/cov2_3_full")
+saveRDS(cov2_3_full, "data/cov2_3_full")
 
 cov2_3_other <- cov2_3_full |>
   filter(row_number() >= 7) |>
@@ -209,7 +209,7 @@ cov2_3 <- cov2_3_full |>
 temp <- patpop_referral |>
   filter(n_referral == 1) |>
   mutate(time_to_first_referral = as.numeric(event_date - index_date))
-saveRDS(temp, "../data/time_to_first_referral") # Save to make Figure 1 - distrubution
+saveRDS(temp, "data/time_to_first_referral") # Save to make Figure 1 - distrubution
 
 cov2_4 <- temp |>
   summarize_var(x = "time_to_first_referral", group_var = "cohort") |>
@@ -277,4 +277,4 @@ cov2 <- data.frame(
   union_all(cov2_5) |>
   union_all(cov2_6)
 
-saveRDS(cov2, "../data/cov2")
+saveRDS(cov2, "data/cov2")

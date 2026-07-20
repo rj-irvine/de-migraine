@@ -24,7 +24,7 @@
 source("00_global.R")
 
 # Step 2. Load patpop_matched
-patpop_matched <- readRDS("../data/patpop_matched")
+patpop_matched <- readRDS("data/patpop_matched")
 
 # Step 3. Get required demo info for population ----
 ## Index age, gender
@@ -295,4 +295,4 @@ cov3 <- data.frame(
   union_all(cov3_6) |>
   union_all(cov3_7)
 
-saveRDS(cov3, "../data/cov3")
+saveRDS(cov3, "data/cov3")

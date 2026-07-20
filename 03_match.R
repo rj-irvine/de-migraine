@@ -70,9 +70,12 @@ patpop_matched <-
   window_order(n_cases, rand) %>%
   filter(row_number() == 1) %>%
   ungroup() %>%
-  # Finalize follow-up
+  # Finalize follow-up. The case defines the window (index_date .. last_obs),
+  # matching how the cov scripts apply it to both arms. last_obs exists in both
+  # cohorts, so after the suffixed join it is last_obs_case / last_obs_control;
+  # take the case side.
   mutate(
-    censor_date = last_obs,
+    censor_date = last_obs_case,
     followup_days = as.numeric(censor_date - index_date)
   ) %>%
   select(
@@ -87,10 +90,10 @@ patpop_matched <-
   ) |>
   collect()
 
-saveRDS(patpop_matched, "../data/patpop_matched")
+saveRDS(patpop_matched, "data/patpop_matched")
 
 # Step 6. Determine count for last row of attrition table ----
-table1 <- readRDS("../data/table1_1") |>
+table1 <- readRDS("data/table1_1") |>
   union_all(
     data.frame(
       label = c(
@@ -107,4 +110,4 @@ table1 <- readRDS("../data/table1_1") |>
   )
 
 
-saveRDS(table1, "../data/table1")
+saveRDS(table1, "data/table1")
