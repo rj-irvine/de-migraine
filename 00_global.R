@@ -97,7 +97,8 @@ codelist_translate <- tbl(
     -created_date,
     -updated_date,
     -status_code
-  )
+  ) |> 
+  filter(language_code == "en")
 person <- tbl(con, I("ORD_IDMT.ORD_CEGEDIM_PUB.V_DE_PERSON")) |>
   rename_all(tolower) |>
   select(
@@ -162,11 +163,11 @@ product <- tbl(
 # NOTE: confirm the DE list_code value for the ICD-10 group. The DE data
 # dictionary describes list_code values including "cim10_code"; verify against
 # the codelist on the analysis machine (UK used "diagnostic_code").
-dx_list_code <- "cim10_code"
-diagnosis_codelist <- codelist |>
+diagnosis_codelist <- codelist_translate |>
   mutate(label = tolower(label)) |>
+  left_join(codelist |> select(code, code_group), by = "code") |> 
   filter(
-    list_code == dx_list_code,
+    list_code == "diagnostic_code",
     (
       # keep NA code_group if label matches
       str_detect(coalesce(code_group, ""), "G43") |
