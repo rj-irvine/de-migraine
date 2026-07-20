@@ -40,12 +40,12 @@ control <- patpop_cohort2
 
 set.seed(123)
 patpop_matched <-
-  study %>%
+  study |>
   # Precompute bounds for join_by()
   mutate(
     yob_lower = year_of_birth - 2L,
     yob_upper = year_of_birth + 2L
-  ) %>%
+  ) |>
   inner_join(
     control,
     by = join_by(
@@ -55,21 +55,21 @@ patpop_matched <-
     ),
     relationship = "many-to-many",
     suffix = c("_case", "_control")
-  ) %>%
+  ) |>
   # Count how many cases each control can match (scarcity)
-  add_count(person_id_control, name = "n_cases") %>%
+  add_count(person_id_control, name = "n_cases") |>
   # One DB-side random tie breaker
-  mutate(rand = sql("RANDOM()")) %>%
+  mutate(rand = sql("RANDOM()")) |>
   # Assign each control to at most one case (scarcity-first)
-  group_by(person_id_control) %>%
-  window_order(n_cases, rand) %>%
-  filter(row_number() == 1) %>%
-  ungroup() %>%
+  group_by(person_id_control) |>
+  window_order(n_cases, rand) |>
+  filter(row_number() == 1) |>
+  ungroup() |>
   # Assign at most one control per case
-  group_by(person_id_case) %>%
-  window_order(n_cases, rand) %>%
-  filter(row_number() == 1) %>%
-  ungroup() %>%
+  group_by(person_id_case) |>
+  window_order(n_cases, rand) |>
+  filter(row_number() == 1) |>
+  ungroup() |>
   # Finalize follow-up. The case defines the window (index_date .. last_obs),
   # matching how the cov scripts apply it to both arms. last_obs exists in both
   # cohorts, so after the suffixed join it is last_obs_case / last_obs_control;
@@ -77,7 +77,7 @@ patpop_matched <-
   mutate(
     censor_date = last_obs_case,
     followup_days = as.numeric(censor_date - index_date)
-  ) %>%
+  ) |>
   select(
     person_id_case,
     index_date,
@@ -87,8 +87,7 @@ patpop_matched <-
     followup_days,
     year_of_birth_case,
     year_of_birth_control
-  ) |>
-  collect()
+  )
 
 saveRDS(patpop_matched, "data/patpop_matched")
 
