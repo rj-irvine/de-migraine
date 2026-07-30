@@ -200,8 +200,30 @@ Design decisions, so they can be re-confirmed rather than re-guessed:
   the matched cohort and fill NA with 0.
 
 **Data model note:** prescription lines live on `contact_prescriptions`
-(`contact_id`, `product_id`) and carry **no date** — the prescribing date comes
-from the parent `contact.start_date`. ATC codes come from `product.product_atc_code`.
+(`contact_id`, `product_id`, `quantity`, `frequency_code`, `duration`, `box`,
+`dci_flag`, `num_sequence`, `diagnostic_code`) and carry **no date** — the
+prescribing date comes from the parent `contact.start_date`. ATC codes and
+molecule come from `product` (`product_atc_code`, `product_molecule_code`,
+`is_generic`, `brand_name`). A richer 43-column `prescription_detail` table adds
+`treatment_code`, `duration_min/max`, `renewal`, `prevention_flag`, dose &
+frequency, `specialist_code` — its DE view name is **unconfirmed**
+(`prescription_detail_view` in `00_global.R`, guessed `V_DE_PRESCRIPTION_DETAIL`),
+so `08_rx.R` pulls it inside a `tryCatch` that degrades to skipping if wrong.
+
+**Treatment-pattern analyses (08_rx.R, cov4_1..cov4_7):** Rx count/patient, lines
+by ATC code, index (first-line) N02 subgroup, time to first N02 Rx, annualized
+Rx, total quantity dispensed, and a possible acute-medication-overuse flag
+(>=10 N02 Rx/yr, an MOH proxy; denominator = full matched arm, so zeros count).
+
+**Licence-safety extracts:** because DE data access ended after the final pull
+(2026-07), `08_rx.R` saves durable line-level RDS extracts — `data/rx_lines_raw`
+(all N02 lines + product attributes), `data/rx_obs` (in-window, cohort-tagged),
+and `data/rx_detail_raw` (prescription_detail, if the view resolved). Any further
+Rx analysis should be re-derived OFFLINE from these, NOT re-queried.
+
+**IN-list cap caveat:** the N02 `product_id` filter uses `%in% local(...)`, which
+is safe only because the N02 product list is small (<<200k). Never do this with
+a large key set (see §1) — the 485k patient list hit Snowflake's 200k cap.
 
 **The no-`copy = TRUE` pattern** (see §1) is load-bearing here:
 
@@ -221,11 +243,29 @@ rx_obs <- rx_lines |>
 ## 7. Output formatting
 
 `99_table_output.R` must produce a **presentation-ready** workbook, not a data
-dump. It defines a reusable `write_styled_table()` helper giving each sheet a
-merged title bar, styled header row, banded rows, thousands separators on
-counts, a frozen header, an autofilter, and sized columns. Add new sheets
-through that helper rather than calling `writeData()` directly, so the workbook
-stays visually consistent.
+dump. It is styled to match the UK deliverable
+(`documents/V2_UK_Migraine_Headache_Results.xlsx`), whose conventions are:
+
+- A **Table of Contents** sheet (Item / Tab / Description / Notes) listing every
+  sheet.
+- Content offset to **B2** (column A and row 1 are margins).
+- **Cohort-count column headers**: `Cohort 1\nHeadache Disorder\nN = <n_case>` /
+  `Cohort 2\nNo Headache Disorder\nN = <n_control>`, derived at runtime from
+  `patpop_matched` (do NOT hardcode counts — the UK file did, and they went
+  stale across reruns).
+- Objective/section rows (the "To assess ..." rows where both value columns are
+  NA) rendered **bold** so the outcomes table reads as grouped sections.
+- Indented sub-rows (5 leading spaces, produced upstream by `summarize_var`).
+- A **matching footnote** on the attrition sheet.
+- Navy title bar, blue header, zebra banding, frozen header, autofilter on
+  appendices; figures embedded from the `results/figure1*.png` PNGs (07).
+
+Add sheets through the `write_styled_table()` helper so the look stays uniform.
+
+**DE vs. UK deliverable:** all referral sheets/appendices are removed (T2b Ref
+Specialty, A2 Referral Codelist, A3 Full Specialty). DE adds **T3. N02
+Prescriptions** and **A2. N02 ATC Codelist**. Output file:
+`results/DE_Migraine_Headache_Results.xlsx`.
 
 ---
 

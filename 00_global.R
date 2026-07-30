@@ -152,6 +152,14 @@ product <- tbl(
     -updated_date,
     -status_code
   )
+# Richer prescription-detail table (treatment_code, duration_min/max, renewal,
+# prevention_flag, dose/frequency, specialist_code). This is a SEPARATE table
+# from contact_prescriptions.
+# NOTE: the DE view name is UNCONFIRMED. The dictionary shows the 43-column
+# prescription-detail block but no name. V_DE_PRESCRIPTION_DETAIL is the best
+# guess from the naming pattern; verify against information_schema before the
+# run. Wrapped in tryCatch in 08_rx.R so a wrong name degrades gracefully.
+prescription_detail_view <- "ORD_IDMT.ORD_CEGEDIM_PUB.V_DE_PRESCRIPTION_DETAIL"
 
 
 # Create study codelist(s) ----
