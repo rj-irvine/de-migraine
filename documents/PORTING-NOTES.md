@@ -66,6 +66,13 @@ down to the database. The cohorts are deliberately *not* saved to disk — a laz
 tbl does not survive a session restart, and collecting the control pool would be
 enormous.
 
+**But `patpop_matched` MUST be `collect()`ed before `saveRDS`** (end of the 03
+pipeline). It is the small, final matched set that 04/06/08 read back with
+`readRDS` and access via `$` / `pull()`. If it is saved lazy, the RDS holds a
+dead DB pointer and downstream fails with *"use pull instead of \$"* (on `$`) or
+*"external pointer is not valid"* (on `pull()`). This `collect()` has been lost
+in edits once — keep it.
+
 ---
 
 ## 3. What is country-specific (the actual porting checklist)

@@ -87,7 +87,12 @@ patpop_matched <-
     followup_days,
     year_of_birth_case,
     year_of_birth_control
-  )
+  ) |>
+  # Bring the matched set local before saving. Without this, patpop_matched is a
+  # lazy Snowflake query and the RDS holds a dead DB pointer, so downstream
+  # programs (04/06/08) fail on `patpop_matched$...` ("use pull") or on pull()
+  # ("external pointer is not valid"). Collecting makes it a real data frame.
+  collect()
 
 saveRDS(patpop_matched, "data/patpop_matched")
 
