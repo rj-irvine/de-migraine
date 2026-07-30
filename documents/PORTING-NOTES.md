@@ -65,6 +65,13 @@ the codelist appendices. 99_euroboard_appendix.R writes the diagnosis + N02 ATC
 codelists.
 ```
 
+**`runAll.R`** drives the whole pipeline end to end, excluding the referral
+program (`05_cov2.R`): it sources `03 -> 04 -> 06 -> 07 -> 08 -> 09 -> 99s` into
+the **global** env (03 pulls in 00/01/02), timing each step and stopping on the
+first error. It must source into `.GlobalEnv` (not an isolated env) because the
+pipeline relies on global coupling — `functions/patpop_matched_obs.R` reads
+`temp`/`patpop_matched` by lexical scope from the global env.
+
 `03_match.R` sources `01` and `02` directly (each of which sources `00`) so the
 cohorts exist as **live lazy Snowflake tbls** and the matching join is pushed
 down to the database. The cohorts are deliberately *not* saved to disk — a lazy
