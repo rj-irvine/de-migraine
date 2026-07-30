@@ -215,14 +215,32 @@ index (first-line) N02 subgroup, time to first N02 Rx, annualized Rx, total
 quantity dispensed, and a possible acute-medication-overuse flag (>=10 N02 Rx/yr,
 an MOH proxy; denominator = full matched arm, so zeros count).
 
-**Treatment-pattern analyses (08_rx.R, cov4_8..cov4_11):** built from a
-per-patient subgroup summary (`data/rx_patient_tx`) over follow-up — distinct
-N02 subgroups per patient (regimen breadth / lines of therapy), switching between
-subgroups (>=2 distinct subgroups), combination/add-on among N02C users (N02C +
-N02A/B), and the most common ordered subgroup pathways (e.g. "N02B -> N02C", top
-6 + "Other pathway"). Subgroup = 4th-level ATC (N02A/N02B/N02C); pathway order
-comes from `arrange(event_date)` before `group_by`, so `unique()` is
-first-appearance order.
+**Subgroup pattern summaries (08_rx.R, cov4_8..cov4_11):** per-patient subgroup
+summary (`data/rx_patient_tx`) — distinct N02 subgroups per patient, switching
+between subgroups, combination/add-on among N02C users, and common ordered
+subgroup pathways. Subgroup = 4th-level ATC (N02A/N02B/N02C).
+
+**RWE treatment patterns (09_rx_patterns.R, cov5_1..cov5_7 -> `data/cov5`, T4):**
+the full treatment-pattern constructs, built OFFLINE from `data/rx_obs` (no
+Snowflake), so they can be recalibrated after the licence ends:
+- (A) **Treatment episodes / persistence**: episodes = runs of Rx where each
+  starts within (running coverage end + GRACE_DAYS); reports episodes/patient
+  and first-episode duration. Saved: `data/rx_episodes`.
+- (B) **Lines of therapy**: a line = maximal run on the same molecule with no
+  gap beyond grace; reports lines/patient and molecule at line 1 (top 6 +
+  Other). Saved: `data/rx_lot`.
+- (C) **Adherence**: MPR (total days-supply / span, capped at 1) and PDC
+  (distinct covered days / span, via an interval-union sweep), plus % adherent
+  (PDC >= 0.80). Saved: `data/rx_adherence`.
+
+  **CRITICAL days-supply caveat:** days-supply is NOT documented in the DE
+  dictionary. `09_rx_patterns.R` assumes the `duration` field = DAYS (fallback
+  30d when missing/<=0), grace = 30d. Both are isolated: recalibrate by editing
+  ONLY the `days_supply()` function + `GRACE_DAYS`/`DEFAULT_DAYS_SUPPLY` consts,
+  then re-run offline. A diagnostics table (`data/rx_daysupply_diag`,
+  `data/rx_frequency_dist`) tabulates the raw `duration`/`quantity`/`frequency`
+  distributions — CHECK IT while data is live to confirm `duration` is days.
+  Every episode/LoT/adherence number is only as trustworthy as that assumption.
 
 **Licence-safety extracts:** because DE data access ended after the final pull
 (2026-07), `08_rx.R` saves durable line-level RDS extracts — `data/rx_lines_raw`

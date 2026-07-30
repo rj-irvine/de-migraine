@@ -8,8 +8,9 @@
 # Date of Creation     : 2025-11-17
 #
 # Program Inputs       : "data/table1", "data/patpop_matched", "data/cov1",
-#                        "data/cov3", "data/cov4", "data/diagnosis_codelist",
-#                        "data/rx_codelist",
+#                        "data/cov3", "data/cov4", "data/cov5" (optional),
+#                        "data/rx_daysupply_diag" (optional),
+#                        "data/diagnosis_codelist", "data/rx_codelist",
 #                        "results/figure1a_gp_visits_hist.png" (optional)
 # Program Outputs      : "results/DE_Migraine_Headache_Results.xlsx"
 #
@@ -213,6 +214,7 @@ toc <- data.frame(
     "Table 1. Attrition Flow",
     "Table 2. Outcome Variables",
     "Table 3. N02 Prescriptions",
+    "Table 4. N02 Treatment Patterns",
     "Figure 1. Annualized GP Visits",
     "Appendix 1. Diagnosis Codelist",
     "Appendix 2. N02 ATC Codelist"
@@ -221,6 +223,7 @@ toc <- data.frame(
     "T1. Attrition Flow",
     "T2. Outcome Variables",
     "T3. N02 Prescriptions",
+    "T4. N02 Treatment Patterns",
     "F1. Annualized GP Visits",
     "A1. Diagnosis Codelist",
     "A2. N02 ATC Codelist"
@@ -228,12 +231,16 @@ toc <- data.frame(
   Description = c(
     "Patient selection / attrition flow",
     "Continuous and discrete outcome measures (GP visits, demographics)",
-    "N02 (analgesic) prescription counts, incl. N02C antimigraine",
+    "N02 (analgesic) prescription counts & patterns, incl. N02C antimigraine",
+    "Treatment episodes, lines of therapy, and adherence (MPR/PDC)",
     "Distribution of annualized all-cause GP visits by cohort",
     "Codelist used to identify headache disorder patients (ICD-10)",
     "N02 (analgesic) products used for the prescription objective (ATC)"
   ),
-  Notes = c("", "", "DE-specific objective (not in UK study)", "", "", ""),
+  Notes = c("", "",
+            "DE-specific objective (not in UK study)",
+            "DE-specific; days-supply assumption applies (see sheet footnote)",
+            "", "", ""),
   stringsAsFactors = FALSE
 )
 
@@ -314,6 +321,47 @@ write_styled_table(
 )
 style_objective_rows(wb, "T3. N02 Prescriptions", cov4,
                      value_cols = c("case", "control"), first_data_row = fd2)
+
+# ---------------------------------------------------------------------------
+# Table 4. N02 Treatment Patterns (episodes, lines of therapy, adherence) ----
+# Produced by 09_rx_patterns.R; guarded so 99 still runs if 09 hasn't run.
+# ---------------------------------------------------------------------------
+if (file.exists("data/cov5")) {
+  cov5 <- readRDS("data/cov5") |>
+    rename(`Outcome Variable` = name, case = case, control = control)
+
+  write_styled_table(
+    wb, "T4. N02 Treatment Patterns",
+    title = "Table 4. N02 Treatment Patterns — Episodes, Lines of Therapy, Adherence",
+    df = cov5,
+    headers = c("Outcome Variable", hdr_case, hdr_control),
+    center_cols = c("case", "control"),
+    col_widths = c(62, 26, 26),
+    header_height = 46
+  )
+  style_objective_rows(wb, "T4. N02 Treatment Patterns", cov5,
+                       value_cols = c("case", "control"), first_data_row = fd2)
+
+  # Days-supply assumption note (this table depends on the `duration` = days
+  # assumption; surface it so readers know the caveat).
+  if (file.exists("data/rx_daysupply_diag")) {
+    diag <- readRDS("data/rx_daysupply_diag")
+    note_row <- ROW0 + 3 + nrow(cov5) + 2
+    writeData(
+      wb, "T4. N02 Treatment Patterns",
+      paste0("Days-supply assumption: prescription `duration` treated as days ",
+             "(median = ", round(diag$duration_median, 0),
+             ", missing/invalid set to ", 30, "d); grace period 30d. ",
+             "Verify the duration unit before interpreting episodes/LoT/adherence."),
+      startRow = note_row, startCol = COL0
+    )
+    mergeCells(wb, "T4. N02 Treatment Patterns",
+               cols = COL0:(COL0 + 2), rows = note_row)
+    addStyle(wb, "T4. N02 Treatment Patterns", st_footnote,
+             rows = note_row, cols = COL0:(COL0 + 2), gridExpand = TRUE)
+    setRowHeights(wb, "T4. N02 Treatment Patterns", rows = note_row, heights = 40)
+  }
+}
 
 # ---------------------------------------------------------------------------
 # Figure 1. Annualized GP Visits ----
