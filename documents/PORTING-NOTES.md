@@ -19,9 +19,14 @@ was completed first; DE was the first port and added a prescription objective.
   dbplyr's `copy = TRUE` on any local→lazy join. Every join must be
   **local↔local or lazy↔lazy** — dbplyr errors with *"x and y must both be lazy
   or both be data.frames"* otherwise. Rules of thumb:
-  - Pushing a local **vector** into a lazy filter is fine and encouraged:
-    `filter(person_id %in% local(matched_ids))` becomes an SQL `IN (...)` list.
-    This is the *pull* direction, not a copy.
+  - Pushing a local **vector** into a lazy filter (`filter(x %in% local(v))`)
+    becomes an SQL `IN (...)` list. Fine for **small** sets only — Snowflake
+    caps a literal list at **200,000** expressions. The matched cohort (~485k
+    persons) blows past this, so do NOT filter the contact stream by matched ids
+    this way. Instead collect the DB side after cheap in-DB predicates (date,
+    type) and drop to the cohort with a **local** join (see `04_cov1.R` Step 3 +
+    `patpop_matched_obs()`). If a large-set filter is unavoidable, batch the
+    vector into <200k chunks and row-bind locally.
   - Pushing a local **table** into a lazy join is what you cannot do. To join a
     local frame (e.g. `readRDS("data/patpop_matched")`) to a database table,
     first restrict the database side (ideally with a `local()` vector filter as
