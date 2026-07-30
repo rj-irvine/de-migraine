@@ -305,7 +305,7 @@ cov4 <- readRDS("data/cov4") |>
 
 write_styled_table(
   wb, "T3. N02 Prescriptions",
-  title = "Table 3. N02 (Analgesic) Prescription Counts, incl. N02C Antimigraine",
+  title = "Table 3. N02 (Analgesic) Prescription & Treatment Patterns, incl. N02C Antimigraine",
   df = cov4,
   headers = c("Outcome Variable", hdr_case, hdr_control),
   center_cols = c("case", "control"),

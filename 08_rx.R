@@ -10,6 +10,9 @@
 # Program Inputs       : "data/patpop_matched", "data/rx_codelist"
 # Program Outputs      : "data/cov4",
 #                        "data/rx_lines_raw"   (durable line-level N02 extract),
+#                        "data/rx_obs"         (in-window, cohort-tagged N02 lines),
+#                        "data/rx_patient_tx"  (per-patient treatment-pattern summary),
+#                        "data/time_to_first_rx",
 #                        "data/rx_detail_raw"  (durable prescription_detail extract,
 #                                               if the view is available)
 #
@@ -19,7 +22,7 @@
 #                        the matched cohort, both arms, within each person's
 #                        follow-up window (index_date < event_date <= censor_date).
 #
-#                        Analyses:
+#                        Analyses (cov4_1..cov4_11, by cohort):
 #                          cov4_1  Number of N02 Rx per patient
 #                          cov4_2  N02 Rx lines by ATC code
 #                          cov4_3  Index (first-line) N02 subgroup, n (%)
@@ -28,6 +31,11 @@
 #                          cov4_6  Total quantity dispensed per patient
 #                          cov4_7  Possible acute-medication overuse (>=10 N02
 #                                  Rx/year), n (%)  [MOH risk proxy]
+#                        Treatment patterns:
+#                          cov4_8  Distinct N02 subgroups per patient (breadth)
+#                          cov4_9  Switched between N02 subgroups, n (%)
+#                          cov4_10 Combination use among N02C users, n (%)
+#                          cov4_11 Most common N02 subgroup pathways, n (%)
 #
 #                        LICENCE NOTE: data access ends after the current pull,
 #                        so this program also saves durable line-level extracts
@@ -286,6 +294,117 @@ cov4_7 <- summarize_var(overuse, x = "overuse", group_var = "cohort") |>
                        name))
 
 # ===========================================================================
+# TREATMENT PATTERNS
+# The following analyses characterise how N02 therapy evolves over a patient's
+# follow-up: regimen breadth, switching between N02 subgroups, combination /
+# add-on use, and the ordered subgroup pathway (lines of therapy).
+# All operate on rx_obs (in-window N02 lines, cohort-tagged). "Subgroup" is the
+# 4th-level ATC (N02A opioids, N02B other analgesics, N02C antimigraine).
+# ===========================================================================
+
+# Per-patient subgroup summary: the ordered distinct-subgroup sequence, the
+# count of distinct subgroups (regimen breadth / lines of therapy), the count of
+# distinct molecules, and flags for each subgroup's presence.
+patient_tx <- rx_obs |>
+  filter(!is.na(atc_subgroup)) |>
+  arrange(cohort, person_id, event_date, num_sequence, product_atc_code) |>
+  group_by(cohort, person_id) |>
+  summarise(
+    n_subgroups = n_distinct(atc_subgroup),
+    n_molecules = n_distinct(product_molecule_code[!is.na(product_molecule_code)]),
+    has_n02a = as.integer(any(atc_subgroup == "N02A")),
+    has_n02b = as.integer(any(atc_subgroup == "N02B")),
+    has_n02c = as.integer(any(atc_subgroup == "N02C")),
+    # Ordered pathway of DISTINCT subgroups in first-appearance order.
+    subgroup_path = paste(unique(atc_subgroup), collapse = " -> "),
+    .groups = "drop"
+  ) |>
+  mutate(
+    switched = ifelse(n_subgroups >= 2, "Yes", "No"),
+    n_subgroups_cat = case_when(
+      n_subgroups == 1 ~ "1 subgroup",
+      n_subgroups == 2 ~ "2 subgroups",
+      n_subgroups >= 3 ~ ">= 3 subgroups"
+    ),
+    # Combination / add-on among N02C (antimigraine) users.
+    n02c_combo = case_when(
+      has_n02c == 1 & (has_n02a == 1 | has_n02b == 1) ~ "N02C + other N02",
+      has_n02c == 1 ~ "N02C only",
+      TRUE ~ NA_character_
+    )
+  )
+saveRDS(patient_tx, "data/rx_patient_tx")
+
+# ---------------------------------------------------------------------------
+# cov4_8. Number of distinct N02 subgroups per patient, n (%) ----
+# Regimen breadth / lines of therapy (among patients with >=1 N02 Rx).
+# ---------------------------------------------------------------------------
+cov4_8 <- patient_tx |>
+  summarize_var(x = "n_subgroups_cat", group_var = "cohort") |>
+  mutate(name = ifelse(row_number() == 1,
+                       "Number of distinct N02 subgroups per patient, n (%)", name))
+
+# ---------------------------------------------------------------------------
+# cov4_9. Switched between N02 subgroups during follow-up, n (%) ----
+# "Yes" = received >=2 distinct N02 subgroups over follow-up.
+# ---------------------------------------------------------------------------
+cov4_9 <- patient_tx |>
+  summarize_var(x = "switched", group_var = "cohort") |>
+  mutate(name = ifelse(row_number() == 1,
+                       "Switched between N02 subgroups during follow-up, n (%)", name))
+
+# ---------------------------------------------------------------------------
+# cov4_10. Combination / add-on among N02C users, n (%) ----
+# Of patients ever prescribed N02C, the share also prescribed N02A or N02B.
+# Denominator here is N02C users (patients with no N02C are NA and drop out).
+# ---------------------------------------------------------------------------
+cov4_10 <- patient_tx |>
+  filter(!is.na(n02c_combo)) |>
+  summarize_var(x = "n02c_combo", group_var = "cohort") |>
+  mutate(name = ifelse(row_number() == 1,
+                       "Combination use among N02C (antimigraine) users, n (%)", name))
+
+# ---------------------------------------------------------------------------
+# cov4_11. Most common N02 subgroup treatment pathways, n (%) ----
+# The ordered distinct-subgroup sequence (e.g. "N02B -> N02C"); top 6 shown, the
+# remainder collapsed to "Other pathway" via the same re-parse pattern used in
+# cov2_3/cov3_1.
+# ---------------------------------------------------------------------------
+cov4_11_full <- patient_tx |>
+  summarize_var(x = "subgroup_path", group_var = "cohort") |>
+  mutate(
+    order = case |>
+      str_extract("^[0-9,]+") |>
+      str_replace_all(",", "") |>
+      as.numeric(),
+    name = ifelse(is.na(name),
+                  "Most common N02 subgroup treatment pathways, n (%)", name),
+    order = ifelse(is.na(order), 99999, order)
+  ) |>
+  arrange(desc(order))
+
+cov4_11_other <- cov4_11_full |>
+  filter(row_number() >= 7) |>
+  mutate(name = "     Other pathway") |>
+  mutate(
+    case_num = case |> str_extract("^[0-9,]+") |> str_replace_all(",", "") |>
+      as.numeric(),
+    control_num = control |> str_extract("^[0-9,]+") |> str_replace_all(",", "") |>
+      as.numeric()
+  ) |>
+  group_by(name) |>
+  summarise(
+    case = prettyNum(sum(case_num, na.rm = TRUE), big.mark = ","),
+    control = prettyNum(sum(control_num, na.rm = TRUE), big.mark = ","),
+    .groups = "drop"
+  )
+
+cov4_11 <- cov4_11_full |>
+  filter(between(row_number(), 1, 6)) |>
+  select(name, case, control) |>
+  union_all(cov4_11_other)
+
+# ===========================================================================
 # Step 7. Combine into a single outcomes block and save ----
 # ===========================================================================
 cov4 <- data.frame(
@@ -298,7 +417,11 @@ cov4 <- data.frame(
   union_all(cov4_4) |>
   union_all(cov4_5) |>
   union_all(cov4_6) |>
-  union_all(cov4_7)
+  union_all(cov4_7) |>
+  union_all(cov4_8) |>
+  union_all(cov4_9) |>
+  union_all(cov4_10) |>
+  union_all(cov4_11)
 
 saveRDS(cov4, file = "data/cov4")
 print("cov4 (N02 prescription patterns) has been created and saved to data directory.")

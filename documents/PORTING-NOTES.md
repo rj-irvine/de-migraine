@@ -210,10 +210,19 @@ frequency, `specialist_code` — its DE view name is **unconfirmed**
 (`prescription_detail_view` in `00_global.R`, guessed `V_DE_PRESCRIPTION_DETAIL`),
 so `08_rx.R` pulls it inside a `tryCatch` that degrades to skipping if wrong.
 
-**Treatment-pattern analyses (08_rx.R, cov4_1..cov4_7):** Rx count/patient, lines
-by ATC code, index (first-line) N02 subgroup, time to first N02 Rx, annualized
-Rx, total quantity dispensed, and a possible acute-medication-overuse flag
-(>=10 N02 Rx/yr, an MOH proxy; denominator = full matched arm, so zeros count).
+**Rx analyses (08_rx.R, cov4_1..cov4_7):** Rx count/patient, lines by ATC code,
+index (first-line) N02 subgroup, time to first N02 Rx, annualized Rx, total
+quantity dispensed, and a possible acute-medication-overuse flag (>=10 N02 Rx/yr,
+an MOH proxy; denominator = full matched arm, so zeros count).
+
+**Treatment-pattern analyses (08_rx.R, cov4_8..cov4_11):** built from a
+per-patient subgroup summary (`data/rx_patient_tx`) over follow-up — distinct
+N02 subgroups per patient (regimen breadth / lines of therapy), switching between
+subgroups (>=2 distinct subgroups), combination/add-on among N02C users (N02C +
+N02A/B), and the most common ordered subgroup pathways (e.g. "N02B -> N02C", top
+6 + "Other pathway"). Subgroup = 4th-level ATC (N02A/N02B/N02C); pathway order
+comes from `arrange(event_date)` before `group_by`, so `unique()` is
+first-appearance order.
 
 **Licence-safety extracts:** because DE data access ended after the final pull
 (2026-07), `08_rx.R` saves durable line-level RDS extracts — `data/rx_lines_raw`
