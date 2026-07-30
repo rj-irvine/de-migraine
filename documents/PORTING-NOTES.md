@@ -36,12 +36,19 @@ was completed first; DE was the first port and added a prescription objective.
   ├── 01_patpop_cohort1.R    cases (M2Q criterion) + attrition rows 1-4
   ├── 02_patpop_cohort2.R    controls (no headache)
   └── 03_match.R             1:1 matching + attrition row 5  → data/patpop_matched
-        ├── 04_cov1.R        GP visits
-        ├── 05_cov2.R        referrals            (UK only — see §4)
-        ├── 06_cov3.R        demographics
-        ├── 07_figure1.R     figures
+        ├── 04_cov1.R        GP visits            (ported)
+        ├── 05_cov2.R        referrals            (NOT ported — guarded stop(); see §4)
+        ├── 06_cov3.R        demographics         (ported)
+        ├── 07_figure1.R     figures → results/   (ported)
         └── 08_rx.R          N02 prescriptions    (DE addition — see §6)
               └── 99_table_output.R   styled Excel workbook → results/
+
+DE status: attrition + GP visits + demographics + N02 prescriptions + figures
+are all ported. Only the referral objective (05) is excluded, and it is guarded
+with a stop() so it cannot run by accident. 99_table_output.R assembles Table 1
+(attrition), Table 2 (cov1 GP visits + cov3 demographics), Table 3 (N02 Rx), and
+the codelist appendices. 99_euroboard_appendix.R writes the diagnosis + N02 ATC
+codelists.
 ```
 
 `03_match.R` sources `01` and `02` directly (each of which sources `00`) so the

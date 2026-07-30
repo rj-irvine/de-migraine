@@ -1,5 +1,5 @@
 ###############################################################################
-# Study Name           : UK Migraine
+# Study Name           : DE Migraine
 # Study ID             : 25P01
 # Study Folder Path    : /organon/projects/or_analytics/irvinery/01_projects/
 #                          25P01_THIN_Migraine_Headache/
@@ -73,6 +73,8 @@ patpop_headache_obs <- contact |>
   ) |>
   filter(
     event_date >= StartDate &
+      # "R" is the UK referral contact_type_code; VERIFY the DE value (see
+      # documents/PORTING-NOTES.md §3). Harmless no-op if DE lacks this type.
       !contact_type_code == "R"
   ) |>
   filter(
@@ -195,7 +197,7 @@ cov3_3 <- patpop_demo |>
     name = ifelse(!is.na(name), paste0("     ", name), name),
     name = ifelse(
       is.na(name),
-      "Age at First Diagnosis in Identification Period (years) (ontinuous)",
+      "Age at First Diagnosis in Identification Period (years) (continuous)",
       name
     )
   ) |>
@@ -283,7 +285,7 @@ cov3_7 <- patpop_demo |>
 
 # cov3 output
 cov3 <- data.frame(
-  name = "To describe demograhpic and clinical characteristics of headache disorder patients",
+  name = "To describe demographic and clinical characteristics of headache disorder patients",
   case = NA,
   control = NA
 ) |>

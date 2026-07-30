@@ -1,5 +1,5 @@
 ###############################################################################
-# Study Name           : UK Migraine
+# Study Name           : DE Migraine
 # Study ID             : 25P01
 # Study Folder Path    : /organon/projects/or_analytics/irvinery/01_projects/
 #                          25P01_THIN_Migraine_Headache/
@@ -10,6 +10,19 @@
 # Program Inputs       : "data/patpop_matched"
 # Program Outputs      : "data/time_to_first_referral", "data/cov2"
 #
+# ###########################################################################
+# ##  NOT PORTED TO DE — REFERRAL OBJECTIVE HAS NO DE DATA SOURCE.          ##
+# ##                                                                         ##
+# ##  DE has no referral table (no referral_id anywhere in the schema), so  ##
+# ##  00_global.R does not define `referral` or `referral_codelist`. This   ##
+# ##  program cannot run against DE and is intentionally excluded from the  ##
+# ##  pipeline (03 does not source it; 99_table_output.R omits cov2).       ##
+# ##                                                                         ##
+# ##  The UK logic below is retained for reference only. See                ##
+# ##  documents/PORTING-NOTES.md §4 for candidate proxies if this objective ##
+# ##  must be reproduced. Do not run this file for DE.                       ##
+# ###########################################################################
+
 ###############################################################################
 #                          REVISION / VERSION HISTORY                         #
 ###############################################################################
@@ -22,6 +35,12 @@
 
 # Step 1. Run global program ----
 source("00_global.R")
+
+# Guard: the referral objective is not supported for DE (no referral source).
+stop(
+  "05_cov2.R (referral objective) is not ported to DE: no referral data source. ",
+  "See the header note and documents/PORTING-NOTES.md §4."
+)
 
 # Step 2. Load patpop_matched
 patpop_matched <- readRDS("data/patpop_matched")

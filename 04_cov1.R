@@ -1,5 +1,5 @@
 ###############################################################################
-# Study Name           : UK Migraine
+# Study Name           : DE Migraine
 # Study ID             : 25P01
 # Study Folder Path    : /organon/projects/or_analytics/irvinery/01_projects/
 #                          25P01_THIN_Migraine_Headache/
@@ -41,6 +41,11 @@ temp <- contact |>
   ) |>
   filter(
     event_date >= StartDate &
+      # Exclude referral-type contacts from the GP-visit denominator. "R" is the
+      # UK contact_type_code for referral; VERIFY the DE value against the
+      # codelist (see documents/PORTING-NOTES.md §3). If DE has no such type,
+      # this filter is a harmless no-op; if the value differs, referral contacts
+      # would be miscounted as visits.
       !contact_type_code == "R"
   )
 

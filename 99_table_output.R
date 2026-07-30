@@ -7,14 +7,15 @@
 # Lead Programmer      : Ryan Irvine, CDS
 # Date of Creation     : 2025-11-17
 #
-# Program Inputs       : "data/table1", "data/cov4", "data/diagnosis_codelist",
-#                        "data/rx_codelist"
+# Program Inputs       : "data/table1", "data/cov1", "data/cov3", "data/cov4",
+#                        "data/diagnosis_codelist", "data/rx_codelist"
 # Program Outputs      : "results/de_migraine_tables.xlsx"
 #
-# Description          : Assembles the presentation-ready workbook. This DE
-#                        deliverable covers the attrition table and the new N02
-#                        prescription objective; the UK covariate/referral
-#                        sheets are added back as those programs are ported.
+# Description          : Assembles the presentation-ready workbook: attrition,
+#                        outcomes (GP visits + demographics), and the DE N02
+#                        prescription objective, plus codelist appendices.
+#                        Referral outcomes (cov2) are excluded for DE — no
+#                        referral data source exists.
 #
 ###############################################################################
 #                          REVISION / VERSION HISTORY                         #
@@ -139,14 +140,28 @@ write_styled_table(
   col_widths = c(95, 14)
 )
 
-# Table 2. N02 Prescription Counts (DE-specific objective) ----
+# Table 2. Outcomes — GP visits and demographics ----
+# Referral outcomes (cov2) are excluded for DE: no referral data source.
+table2 <- readRDS("data/cov1") |>
+  union_all(readRDS("data/cov3")) |>
+  rename(Measure = name, Case = case, Control = control)
+
+write_styled_table(
+  wb,
+  sheet = "Table 2. Outcomes",
+  title = "Table 2. Outcomes — GP Visits and Demographic/Clinical Characteristics",
+  df = table2,
+  col_widths = c(60, 30, 30)
+)
+
+# Table 3. N02 Prescription Counts (DE-specific objective) ----
 cov4 <- readRDS("data/cov4") |>
   rename(Measure = name, Case = case, Control = control)
 
 write_styled_table(
   wb,
-  sheet = "Table 2. N02 Prescriptions",
-  title = "Table 2. N02 (Analgesic) Prescription Counts, incl. N02C Antimigraine",
+  sheet = "Table 3. N02 Prescriptions",
+  title = "Table 3. N02 (Analgesic) Prescription Counts, incl. N02C Antimigraine",
   df = cov4,
   col_widths = c(58, 30, 30)
 )
