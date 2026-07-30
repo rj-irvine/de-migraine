@@ -16,10 +16,19 @@ was completed first; DE was the first port and added a prescription objective.
   cannot be executed or verified locally — changes must be reasoned through by
   reading, not by running.
 - **No Snowflake write access.** You cannot create temp tables. This rules out
-  dbplyr's `copy = TRUE` on any local→lazy join. When a local data frame must
-  meet a database table, filter the database side as hard as possible, then
-  `collect()` and finish the join in R. See `08_rx.R` for the pattern, and
-  §5 for why this bit us once already.
+  dbplyr's `copy = TRUE` on any local→lazy join. Every join must be
+  **local↔local or lazy↔lazy** — dbplyr errors with *"x and y must both be lazy
+  or both be data.frames"* otherwise. Rules of thumb:
+  - Pushing a local **vector** into a lazy filter is fine and encouraged:
+    `filter(person_id %in% local(matched_ids))` becomes an SQL `IN (...)` list.
+    This is the *pull* direction, not a copy.
+  - Pushing a local **table** into a lazy join is what you cannot do. To join a
+    local frame (e.g. `readRDS("data/patpop_matched")`) to a database table,
+    first restrict the database side (ideally with a `local()` vector filter as
+    above), `collect()` it, then finish the join in R with both sides local.
+  - See `08_rx.R` and `04_cov1.R` for the pattern; `06_cov3.R` collects its
+    lazy chain (line ~85) before any local join for the same reason. §5 has the
+    history.
 - **Paths** use no `../` prefix: intermediate tables → `data/`, raw results →
   `rawresults/`, final formatted outputs → `results/`. The working directory on
   the analysis machine is already the project root.
