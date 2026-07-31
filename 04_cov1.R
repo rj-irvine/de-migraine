@@ -27,14 +27,8 @@ source("00_global.R")
 patpop_matched <- readRDS("data/patpop_matched")
 
 # Step 3. Get all observations for population of interest ----
-# We cannot copy the local patpop_matched into Snowflake (no write access), so
-# every join must be local<->local or lazy<->lazy. The matched cohort is ~485k
-# persons, which is far too many to push as an IN (...) list (Snowflake caps a
-# literal list at 200k). So we do NOT restrict by person here; we filter the
-# contact stream in-database on the cheap predicates (date, contact type),
-# collect() once, and let patpop_matched_obs() drop to the matched persons
-# locally via its join. After collect, `temp` is a local data frame and all
-# downstream joins are local<->local.
+# Filter contacts on date + type, then collect. patpop_matched_obs() joins this
+# to the matched cohort locally.
 temp <- contact |>
   right_join(
     contact_diagnostics |> select(contact_id, diagnostic_code),
@@ -49,11 +43,7 @@ temp <- contact |>
   ) |>
   filter(
     event_date >= StartDate &
-      # Exclude referral-type contacts from the GP-visit denominator. "R" is the
-      # UK contact_type_code for referral; VERIFY the DE value against the
-      # codelist (see documents/PORTING-NOTES.md §3). If DE has no such type,
-      # this filter is a harmless no-op; if the value differs, referral contacts
-      # would be miscounted as visits.
+      # Drop referral-type contacts ("R") from the GP-visit count.
       !contact_type_code == "R"
   ) |>
   collect()

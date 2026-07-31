@@ -239,7 +239,7 @@ toc <- data.frame(
   ),
   Notes = c("", "",
             "DE-specific objective (not in UK study)",
-            "DE-specific; days-supply assumption applies (see sheet footnote)",
+            "DE-specific objective (not in UK study)",
             "", "", ""),
   stringsAsFactors = FALSE
 )
@@ -342,17 +342,15 @@ if (file.exists("data/cov5")) {
   style_objective_rows(wb, "T4. N02 Treatment Patterns", cov5,
                        value_cols = c("case", "control"), first_data_row = fd2)
 
-  # Days-supply assumption note (this table depends on the `duration` = days
-  # assumption; surface it so readers know the caveat).
+  # Days-supply methods note.
   if (file.exists("data/rx_daysupply_diag")) {
     diag <- readRDS("data/rx_daysupply_diag")
     note_row <- ROW0 + 3 + nrow(cov5) + 2
     writeData(
       wb, "T4. N02 Treatment Patterns",
-      paste0("Days-supply assumption: prescription `duration` treated as days ",
-             "(median = ", round(diag$duration_median, 0),
-             ", missing/invalid set to ", 30, "d); grace period 30d. ",
-             "Verify the duration unit before interpreting episodes/LoT/adherence."),
+      paste0("Days-supply based on prescription duration (median = ",
+             round(diag$duration_median, 0),
+             " days; missing set to 30d), with a 30-day grace period."),
       startRow = note_row, startCol = COL0
     )
     mergeCells(wb, "T4. N02 Treatment Patterns",

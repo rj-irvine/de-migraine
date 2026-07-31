@@ -9,12 +9,11 @@
 #
 # Program Inputs       : "data/patpop_matched", "data/rx_codelist"
 # Program Outputs      : "data/cov4",
-#                        "data/rx_lines_raw"   (durable line-level N02 extract),
+#                        "data/rx_lines_raw"   (line-level N02 extract),
 #                        "data/rx_obs"         (in-window, cohort-tagged N02 lines),
 #                        "data/rx_patient_tx"  (per-patient treatment-pattern summary),
 #                        "data/time_to_first_rx",
-#                        "data/rx_detail_raw"  (durable prescription_detail extract,
-#                                               if the view is available)
+#                        "data/rx_detail_raw"  (prescription_detail extract)
 #
 # Description          : DE-specific objective (not performed in the UK study).
 #                        Prescription patterns for ATC group N02 (analgesics),
@@ -37,11 +36,8 @@
 #                          cov4_10 Combination use among N02C users, n (%)
 #                          cov4_11 Most common N02 subgroup pathways, n (%)
 #
-#                        LICENCE NOTE: data access ends after the current pull,
-#                        so this program also saves durable line-level extracts
-#                        (rx_lines_raw, rx_detail_raw) to data/ so any further
-#                        prescription analysis can be re-derived OFFLINE without
-#                        re-querying Snowflake.
+#                        Also saves line-level extracts (rx_lines_raw, rx_obs,
+#                        rx_detail_raw) so later analysis can run offline.
 #
 ###############################################################################
 #                          REVISION / VERSION HISTORY                         #
@@ -49,9 +45,8 @@
 # Version   Date        Author                  Description
 # -------   ----------  ---------------------   ------------------------------
 # 0.1       2026-07-17  Ryan Irvine             New DE prescription objective
-# 0.2       2026-07-30  Ryan Irvine             Treatment patterns (first-line,
-#                                               persistence/intensity) + durable
-#                                               raw extracts before licence ends
+# 0.2       2026-07-30  Ryan Irvine             Treatment patterns + line-level
+#                                               extracts
 # 1.0
 ################################################################################
 
@@ -62,7 +57,7 @@ source("00_global.R")
 patpop_matched <- readRDS("data/patpop_matched")
 rx_codelist <- readRDS("data/rx_codelist")
 
-# N02 product ids, pushed into Snowflake for the prescription filter.
+# N02 product ids for the prescription filter.
 n02_product_ids <- as.character(rx_codelist$product_id)
 
 # Matched-cohort follow-up windows (both arms, case-defined window).
@@ -76,12 +71,9 @@ match_windows <- bind_rows(
 )
 
 # ---------------------------------------------------------------------------
-# Step 3. Durable line-level N02 extract ----
-# Pull EVERY available field for N02 prescription lines (filter to N02 products
-# in-DB, then collect). This is the licence-safety artefact: once saved, all
-# downstream analysis can run offline. contact_prescriptions carries quantity,
-# frequency_code, duration, box, dci_flag, num_sequence, diagnostic_code; the
-# date comes from the parent contact.
+# Step 3. N02 prescription lines ----
+# N02 lines from contact_prescriptions, dated from the parent contact, with
+# product attributes attached.
 # ---------------------------------------------------------------------------
 rx_lines <- contact_prescriptions |>
   select(
@@ -95,8 +87,6 @@ rx_lines <- contact_prescriptions |>
     by = "contact_id"
   ) |>
   filter(!is.na(person_id) & !is.na(event_date) & event_date >= StartDate) |>
-  # Attach product attributes (molecule, generic/brand) from the product master,
-  # which is lazy here — keep the join lazy (both sides lazy) then collect once.
   left_join(
     product |>
       select(product_id, product_atc_code, product_molecule_code,
@@ -105,8 +95,7 @@ rx_lines <- contact_prescriptions |>
   ) |>
   collect()
 
-# Attach cohort/window locally and keep only in-window lines. Also derive the
-# N02 subgroup (4th-level ATC) and antimigraine flag from the codelist.
+# Keep in-window lines and tag with cohort + ATC subgroup.
 rx_obs <- rx_lines |>
   inner_join(match_windows, by = "person_id", relationship = "many-to-many") |>
   filter(event_date > index_date & event_date <= censor_date) |>
@@ -117,16 +106,13 @@ rx_obs <- rx_lines |>
     is_antimigraine = ifelse(!is.na(atc_subgroup) & atc_subgroup == "N02C", 1L, 0L)
   )
 
-# Save the durable extracts (licence safety).
 saveRDS(rx_lines, "data/rx_lines_raw")
 saveRDS(rx_obs, "data/rx_obs")
-print("Durable N02 line-level extract saved to data/rx_lines_raw and data/rx_obs.")
 
 # ---------------------------------------------------------------------------
-# Step 3b. Durable prescription_detail extract (richer fields) ----
-# The 43-column prescription_detail table adds treatment_code, duration_min/max,
-# renewal, prevention_flag, dose/frequency, specialist_code. Its DE view name is
-# unconfirmed, so this is wrapped so a wrong/missing name does not abort the run.
+# Step 3b. prescription_detail extract (richer fields) ----
+# Extra fields (treatment_code, duration, renewal, prevention_flag, dose,
+# frequency). tryCatch so a missing view just skips it.
 # ---------------------------------------------------------------------------
 rx_detail_raw <- tryCatch(
   {
@@ -149,24 +135,20 @@ rx_detail_raw <- tryCatch(
       collect()
   },
   error = function(e) {
-    message("prescription_detail extract skipped (view unavailable or renamed): ",
-            conditionMessage(e))
+    message("prescription_detail skipped: ", conditionMessage(e))
     NULL
   }
 )
 if (!is.null(rx_detail_raw)) {
   saveRDS(rx_detail_raw, "data/rx_detail_raw")
-  print("Durable prescription_detail extract saved to data/rx_detail_raw.")
 }
 
 # ===========================================================================
 # ANALYSES (all by cohort, over the follow-up window)
 # ===========================================================================
 
-# Per-person window info (one row per patient in the matched set, incl. those
-# with zero N02 lines) so intensity/overuse denominators use the full cohort.
-# 1:1 matching means each id appears once per arm, but collapse defensively in
-# case an id recurs, taking the max follow-up.
+# One row per patient per arm, incl. patients with zero N02 lines (used as the
+# denominator for the overuse rate).
 person_window <- match_windows |>
   group_by(person_id, cohort) |>
   summarise(followup_days = max(followup_days, na.rm = TRUE), .groups = "drop")
@@ -212,8 +194,7 @@ cov4_2 <- cov4_2 |>
 
 # ---------------------------------------------------------------------------
 # cov4_3. Index (first-line) N02 subgroup, n (%) ----
-# The N02 subgroup of each patient's FIRST N02 prescription in follow-up.
-# Ties on date broken by lowest num_sequence then ATC to be deterministic.
+# Subgroup of each patient's first N02 prescription.
 # ---------------------------------------------------------------------------
 first_rx <- rx_obs |>
   filter(!is.na(atc_subgroup)) |>
@@ -276,9 +257,8 @@ cov4_6 <- summarize_var(n02_per_person, x = "total_qty", group_var = "cohort") |
 
 # ---------------------------------------------------------------------------
 # cov4_7. Possible acute-medication overuse, n (%) ----
-# Proxy for medication-overuse-headache (MOH) risk: patients averaging >=10 N02
-# prescriptions per year of follow-up. Denominator is the FULL matched arm
-# (patients with zero N02 Rx count as "No"), so this is a population rate.
+# Patients averaging >=10 N02 Rx/year (MOH proxy). Denominator is the full arm,
+# so zero-Rx patients count as "No".
 # ---------------------------------------------------------------------------
 overuse <- person_window |>
   left_join(n02_annual |> select(person_id, cohort, n_rx_annual),
@@ -295,16 +275,11 @@ cov4_7 <- summarize_var(overuse, x = "overuse", group_var = "cohort") |>
 
 # ===========================================================================
 # TREATMENT PATTERNS
-# The following analyses characterise how N02 therapy evolves over a patient's
-# follow-up: regimen breadth, switching between N02 subgroups, combination /
-# add-on use, and the ordered subgroup pathway (lines of therapy).
-# All operate on rx_obs (in-window N02 lines, cohort-tagged). "Subgroup" is the
-# 4th-level ATC (N02A opioids, N02B other analgesics, N02C antimigraine).
+# Subgroup breadth, switching, combination use, and subgroup pathways.
+# Subgroup = 4th-level ATC (N02A opioids, N02B other analgesics, N02C antimigraine).
 # ===========================================================================
 
-# Per-patient subgroup summary: the ordered distinct-subgroup sequence, the
-# count of distinct subgroups (regimen breadth / lines of therapy), the count of
-# distinct molecules, and flags for each subgroup's presence.
+# Per-patient subgroup summary.
 patient_tx <- rx_obs |>
   filter(!is.na(atc_subgroup)) |>
   arrange(cohort, person_id, event_date, num_sequence, product_atc_code) |>
@@ -315,7 +290,7 @@ patient_tx <- rx_obs |>
     has_n02a = as.integer(any(atc_subgroup == "N02A")),
     has_n02b = as.integer(any(atc_subgroup == "N02B")),
     has_n02c = as.integer(any(atc_subgroup == "N02C")),
-    # Ordered pathway of DISTINCT subgroups in first-appearance order.
+    # Distinct subgroups in first-appearance order.
     subgroup_path = paste(unique(atc_subgroup), collapse = " -> "),
     .groups = "drop"
   ) |>
@@ -326,7 +301,6 @@ patient_tx <- rx_obs |>
       n_subgroups == 2 ~ "2 subgroups",
       n_subgroups >= 3 ~ ">= 3 subgroups"
     ),
-    # Combination / add-on among N02C (antimigraine) users.
     n02c_combo = case_when(
       has_n02c == 1 & (has_n02a == 1 | has_n02b == 1) ~ "N02C + other N02",
       has_n02c == 1 ~ "N02C only",
@@ -337,7 +311,6 @@ saveRDS(patient_tx, "data/rx_patient_tx")
 
 # ---------------------------------------------------------------------------
 # cov4_8. Number of distinct N02 subgroups per patient, n (%) ----
-# Regimen breadth / lines of therapy (among patients with >=1 N02 Rx).
 # ---------------------------------------------------------------------------
 cov4_8 <- patient_tx |>
   summarize_var(x = "n_subgroups_cat", group_var = "cohort") |>
@@ -346,7 +319,7 @@ cov4_8 <- patient_tx |>
 
 # ---------------------------------------------------------------------------
 # cov4_9. Switched between N02 subgroups during follow-up, n (%) ----
-# "Yes" = received >=2 distinct N02 subgroups over follow-up.
+# "Yes" = >=2 distinct subgroups.
 # ---------------------------------------------------------------------------
 cov4_9 <- patient_tx |>
   summarize_var(x = "switched", group_var = "cohort") |>
@@ -355,8 +328,7 @@ cov4_9 <- patient_tx |>
 
 # ---------------------------------------------------------------------------
 # cov4_10. Combination / add-on among N02C users, n (%) ----
-# Of patients ever prescribed N02C, the share also prescribed N02A or N02B.
-# Denominator here is N02C users (patients with no N02C are NA and drop out).
+# Of N02C users, the share also on N02A or N02B.
 # ---------------------------------------------------------------------------
 cov4_10 <- patient_tx |>
   filter(!is.na(n02c_combo)) |>
@@ -366,9 +338,7 @@ cov4_10 <- patient_tx |>
 
 # ---------------------------------------------------------------------------
 # cov4_11. Most common N02 subgroup treatment pathways, n (%) ----
-# The ordered distinct-subgroup sequence (e.g. "N02B -> N02C"); top 6 shown, the
-# remainder collapsed to "Other pathway" via the same re-parse pattern used in
-# cov2_3/cov3_1.
+# Ordered subgroup sequence (e.g. "N02B -> N02C"); top 6, rest as "Other pathway".
 # ---------------------------------------------------------------------------
 cov4_11_full <- patient_tx |>
   summarize_var(x = "subgroup_path", group_var = "cohort") |>
