@@ -9,7 +9,6 @@
 #
 # Program Inputs       : "data/diagnosis_codelist"
 # Program Outputs      : "data/table1_1"
-#                        (patpop_cohort1 stays a lazy tbl; see Step 5 note)
 #
 ###############################################################################
 #                          REVISION / VERSION HISTORY                         #
@@ -40,10 +39,10 @@ N_all_patients <- all_patients |>
   distinct(person_id) |>
   summarise(N = n()) |>
   collect() |>
-  pull(N) # UK ref: N = 5,103,238 (DE will differ)
+  pull(N)
 
 # Step 3. M2Q Criterion ----
-## 3-1. Gather all headache disorder observations and leave as lazy table ----
+## 3-1. Gather all headache disorder observations ----
 dx <- as.character(diagnosis_codelist$code)
 headache_obs <- contact_diagnostics |>
   right_join(
@@ -111,7 +110,7 @@ N_m2q_criteria <- obs_cohort1 |>
   distinct(person_id) |>
   summarise(N = n()) |>
   collect() |>
-  pull(N) # UK ref: N = 57,955 (DE will differ)
+  pull(N)
 
 # Step 4. Age >= 18 in year of first diagnosis
 ## 4-1. Identify first diagnosis
@@ -136,12 +135,10 @@ N_18 <- first_diagnosis_ge18 |>
   distinct(person_id) |>
   summarise(N = n()) |>
   collect() |>
-  pull(N) # UK ref: N = 51,134 (DE will differ)
+  pull(N)
 
 # Step 5. All patients must have at least 1 year of follow-up ----
-# Follow-up is measured from index_date to the patient's last observation, so
-# last_obs must be >= index_date + 365 days. (The UK program had the difftime
-# arguments reversed, which excluded the patients who actually had follow-up.)
+# last_obs must be >= index_date + 365 days.
 patpop_cohort1 <- first_diagnosis_ge18 |>
   filter(as.numeric(difftime(last_obs, index_date, units = "days")) >= 365)
 N_1yr <- patpop_cohort1 |>
@@ -149,10 +146,6 @@ N_1yr <- patpop_cohort1 |>
   summarise(N = n()) |>
   collect() |>
   pull(N)
-
-# NOTE: patpop_cohort1 is a lazy Snowflake query, not a local data frame, so it
-# is not saved here (a lazy tbl does not survive a session restart). 03_match.R
-# rebuilds it by sourcing this program so the matching join stays in Snowflake.
 
 # Step 6. Construct part 1 of attrition table ----
 ## NOTE: Only first 4 rows are created here, final row will be generated in

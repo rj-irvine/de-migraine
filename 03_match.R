@@ -7,7 +7,7 @@
 # Lead Programmer      : Ryan Irvine, CDS
 # Date of Creation     : 2025-11-17
 #
-# Program Inputs       : "data/table1_1" (via 01), plus lazy cohorts from 01/02
+# Program Inputs       : cohorts from 01/02, "data/table1_1"
 # Program Outputs      : "data/patpop_matched", "data/table1"
 #
 ###############################################################################
@@ -21,9 +21,7 @@
 ################################################################################
 
 # Step 1. Build cohorts ----
-# Source 01 and 02 (each of which sources 00_global.R) so that patpop_cohort1
-# and patpop_cohort2 exist as live lazy Snowflake tbls and the matching join is
-# pushed down to the database.
+# 01 and 02 (each sources 00_global.R) build patpop_cohort1 and patpop_cohort2.
 source("01_patpop_cohort1.R")
 source("02_patpop_cohort2.R")
 
@@ -70,10 +68,7 @@ patpop_matched <-
   window_order(n_cases, rand) |>
   filter(row_number() == 1) |>
   ungroup() |>
-  # Finalize follow-up. The case defines the window (index_date .. last_obs),
-  # matching how the cov scripts apply it to both arms. last_obs exists in both
-  # cohorts, so after the suffixed join it is last_obs_case / last_obs_control;
-  # take the case side.
+  # Follow-up window is the case's (index_date .. last_obs).
   mutate(
     censor_date = last_obs_case,
     followup_days = as.numeric(censor_date - index_date)
@@ -88,10 +83,7 @@ patpop_matched <-
     year_of_birth_case,
     year_of_birth_control
   ) |>
-  # Bring the matched set local before saving. Without this, patpop_matched is a
-  # lazy Snowflake query and the RDS holds a dead DB pointer, so downstream
-  # programs (04/06/08) fail on `patpop_matched$...` ("use pull") or on pull()
-  # ("external pointer is not valid"). Collecting makes it a real data frame.
+  # Bring the matched set local before saving.
   collect()
 
 saveRDS(patpop_matched, "data/patpop_matched")

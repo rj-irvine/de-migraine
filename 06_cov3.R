@@ -73,8 +73,7 @@ patpop_headache_obs <- contact |>
   ) |>
   filter(
     event_date >= StartDate &
-      # "R" is the UK referral contact_type_code; VERIFY the DE value (see
-      # documents/PORTING-NOTES.md §3). Harmless no-op if DE lacks this type.
+      # Drop referral-type contacts ("R").
       !contact_type_code == "R"
   ) |>
   filter(

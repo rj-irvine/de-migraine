@@ -22,7 +22,7 @@
 #                          04_cov1.R         GP visits            -> data/cov1, gp_visit_annual
 #                          06_cov3.R         demographics         -> data/cov3
 #                          07_figure1.R      figures              -> results/figure1*.png
-#                          08_rx.R           N02 Rx counts + durable extracts
+#                          08_rx.R           N02 Rx counts + extracts
 #                          09_rx_patterns.R  N02 treatment patterns (episodes, LoT, adherence)
 #                          99_table_output.R presentation workbook -> results/*.xlsx
 #                          99_euroboard_appendix.R  codelist appendix workbook
@@ -74,12 +74,7 @@ for (prog in pipeline) {
   t0 <- Sys.time()
   ok <- tryCatch(
     {
-      # Source each program into the GLOBAL environment, exactly as running it by
-      # hand. This is required: the pipeline uses implicit global coupling — e.g.
-      # functions/patpop_matched_obs.R reads `temp` and `patpop_matched` from the
-      # global env by lexical scope, so 04_cov1.R must run there. Sourcing into an
-      # isolated env would break that. The Snowflake `con` (guarded by
-      # if (!exists("con"))) is reused across steps rather than reopened.
+      # Run in the global env, same as running each program by hand.
       source(prog, local = FALSE)
       TRUE
     },

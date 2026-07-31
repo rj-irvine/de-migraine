@@ -76,9 +76,7 @@ source_all <- function(folder_path, pattern = "\\.R$") {
 source_all("functions")
 
 # Load data from Snowflake ----
-# NOTE (DE port): view names carry the DE country token (V_DE_*) in the same
-# schema as the UK study. Verify each name against information_schema on the
-# analysis machine before the first run.
+# DE views (V_DE_*), same schema as the UK study.
 codelist <- tbl(con, I("ORD_IDMT.ORD_CEGEDIM_PUB.V_DE_CODELIST")) |>
   rename_all(tolower) |>
   select(
@@ -152,25 +150,15 @@ product <- tbl(
     -updated_date,
     -status_code
   )
-# Richer prescription-detail table (treatment_code, duration_min/max, renewal,
-# prevention_flag, dose/frequency, specialist_code). This is a SEPARATE table
-# from contact_prescriptions.
-# NOTE: the DE view name is UNCONFIRMED. The dictionary shows the 43-column
-# prescription-detail block but no name. V_DE_PRESCRIPTION_DETAIL is the best
-# guess from the naming pattern; verify against information_schema before the
-# run. Wrapped in tryCatch in 08_rx.R so a wrong name degrades gracefully.
-prescription_detail_view <- "ORD_IDMT.ORD_CEGEDIM_PUB.V_DE_PRESCRIPTION_DETAIL"
+# Prescription-detail table (extra fields: treatment_code, duration, renewal,
+# prevention_flag, dose, frequency, specialist_code). Used by 08_rx.R.
+prescription_detail_view <- "ORD_IDMT.ORD_CEGEDIM_PUB.V_DE_CONTACT_DETAIL_PRESCRIPTIONS"
 
 
 # Create study codelist(s) ----
 ## Diagnosis Codelist ----
-# DE port: codes are ICD-10 (CIM-10) natively, so the UK Read-code hardcoding
-# (INUK.* -> "Headache"/"R51") is dropped. `code` holds the ICD-10 code and
-# `code_group` its chapter grouping. The G43/G44/R51 code_group logic and the
-# label exclusions carry over from the UK program.
-# NOTE: confirm the DE list_code value for the ICD-10 group. The DE data
-# dictionary describes list_code values including "cim10_code"; verify against
-# the codelist on the analysis machine (UK used "diagnostic_code").
+# DE codes are ICD-10, so `code` is the ICD-10 code and `code_group` its chapter.
+# Keep G43/G44/R51 groups (or migraine/headache labels) and drop the exclusions.
 diagnosis_codelist <- codelist_translate |>
   mutate(label = tolower(label)) |>
   left_join(codelist |> select(code, code_group), by = "code") |> 

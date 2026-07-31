@@ -14,26 +14,18 @@
 #                        "data/rx_lot"              (lines of therapy),
 #                        "data/rx_adherence"        (per-patient MPR/PDC)
 #
-# Description          : Real-world treatment-pattern analysis for N02 therapy in
-#                        the matched cohort (both arms), over each patient's
-#                        follow-up window. Three constructs:
+# Description          : N02 treatment patterns for the matched cohort (both
+#                        arms), over each patient's follow-up window:
 #                          (A) Treatment episodes & persistence
 #                          (B) Lines of therapy (by molecule)
 #                          (C) Adherence: MPR and PDC
 #
-#                        RUNS FULLY OFFLINE from data/rx_obs -- no Snowflake
-#                        needed -- so it can be re-run/recalibrated after the DE
-#                        data licence ends.
+#                        Runs off data/rx_obs, so no Snowflake needed.
 #
-# -------------------------------------------------------------------------- #
-#  !! KEY ASSUMPTION -- days-supply per prescription !!                       #
-#  days-supply is NOT documented in the DE data dictionary. We assume the     #
-#  `duration` field (smallint) is DAYS, falling back to DEFAULT_DAYS_SUPPLY   #
-#  when duration is missing or <= 0. Verify against the rx_daysupply_diag     #
-#  distribution (Step 2) while the data is still live. To recalibrate, change  #
-#  ONLY the days_supply() function below and re-run -- everything derives from #
-#  it. GRACE_DAYS is the gap tolerance that ends an episode / starts a line.  #
-# -------------------------------------------------------------------------- #
+#                        Days-supply comes from the `duration` field (days),
+#                        with a 30-day fallback and a 30-day grace period. Both
+#                        live in days_supply() / the constants below, so change
+#                        them in one place if needed.
 #
 ###############################################################################
 #                          REVISION / VERSION HISTORY                         #
@@ -48,11 +40,10 @@
 # Step 1. Setup ----
 source("00_global.R")
 
-DEFAULT_DAYS_SUPPLY <- 30 # used when `duration` is missing / <= 0
-GRACE_DAYS <- 30 # gap tolerance: a gap > coverage + GRACE ends an episode / line
+DEFAULT_DAYS_SUPPLY <- 30 # used when duration is missing / <= 0
+GRACE_DAYS <- 30 # a gap > coverage + GRACE ends an episode / line
 
-# Single source of truth for days-supply. Recalibrate HERE if `duration` turns
-# out not to be days (see the header assumption note and Step 2 diagnostics).
+# Days-supply from the duration field, with a fallback.
 days_supply <- function(duration) {
   d <- suppressWarnings(as.numeric(duration))
   ifelse(is.na(d) | d <= 0, DEFAULT_DAYS_SUPPLY, d)
@@ -60,19 +51,18 @@ days_supply <- function(duration) {
 
 rx_obs <- readRDS("data/rx_obs")
 
-# Order lines within patient once; every construct below relies on this order.
+# Order lines within patient (the constructs below depend on this order).
 rx <- rx_obs |>
   mutate(
     event_date = as.Date(event_date),
     day_supply = days_supply(duration),
-    cov_end = event_date + day_supply # coverage end for this prescription
+    cov_end = event_date + day_supply
   ) |>
   arrange(cohort, person_id, event_date, num_sequence, product_atc_code)
 
 # ===========================================================================
 # Step 2. Days-supply diagnostics ----
-# Tabulate the raw fields so the days-supply assumption can be sanity-checked
-# against real values (e.g. does `duration` cluster at 30/90 -> days?).
+# Distribution of the raw duration/quantity/frequency fields.
 # ===========================================================================
 rx_daysupply_diag <- rx_obs |>
   summarise(
@@ -91,14 +81,11 @@ freq_dist <- rx_obs |>
   arrange(desc(n_lines))
 saveRDS(rx_daysupply_diag, "data/rx_daysupply_diag")
 saveRDS(freq_dist, "data/rx_frequency_dist")
-print("Days-supply diagnostics saved (verify the `duration` unit before trusting episodes/LoT/adherence).")
 
 # ===========================================================================
 # (A) TREATMENT EPISODES & PERSISTENCE ----
-# An episode is a run of prescriptions where each starts within
-# (previous coverage end + GRACE_DAYS). A gap beyond that ends the episode.
-# Reported: episodes per patient, treatment duration per episode, and
-# persistence to the FIRST episode (days from first Rx to its end).
+# An episode is a run of prescriptions each starting within (previous coverage
+# end + GRACE_DAYS). A bigger gap starts a new episode.
 # ===========================================================================
 episodes_lines <- rx |>
   group_by(cohort, person_id) |>
@@ -154,9 +141,8 @@ cov5_2 <- summarize_var(first_episode, x = "episode_duration_days", group_var = 
 
 # ===========================================================================
 # (B) LINES OF THERAPY ----
-# A "line" is a maximal run on the SAME molecule with no gap beyond GRACE. A
-# switch to a different molecule (or a gap beyond grace) starts the next line.
-# Reported: number of lines per patient, and the molecule at lines 1/2/3.
+# A line is a run on the same molecule. A molecule switch or a gap beyond grace
+# starts the next line.
 # ===========================================================================
 lot_lines <- rx |>
   filter(!is.na(product_molecule_code)) |>
@@ -238,14 +224,12 @@ cov5_4 <- cov5_4_full |>
 
 # ===========================================================================
 # (C) ADHERENCE: MPR and PDC ----
-# Over each patient's treatment span (first Rx to last coverage end):
-#   MPR = total days-supply / (span days)          (can exceed 1; capped at 1)
-#   PDC = distinct covered days / (span days)       (never exceeds 1)
-# % adherent = PDC >= 0.80. Patients with a single prescription have a span of
-# that Rx's days-supply. Denominator is patients with >=1 N02 Rx.
+# Over each patient's span (first Rx to last coverage end):
+#   MPR = total days-supply / span days      (capped at 1)
+#   PDC = distinct covered days / span days
+# Adherent = PDC >= 0.80.
 # ===========================================================================
-# Covered-day count for one patient: merge overlapping [start, end) intervals
-# and sum their lengths. Returns a single numeric (days covered).
+# Covered days for one patient: merge overlapping [start, end) intervals and sum.
 union_covered_days <- function(start, end) {
   ord <- order(start)
   s <- as.numeric(start[ord])
