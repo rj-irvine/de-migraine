@@ -12,13 +12,17 @@
 #                        "data/rx_daysupply_diag"   (days-supply diagnostics),
 #                        "data/rx_episodes"         (constructed episodes),
 #                        "data/rx_lot"              (lines of therapy),
-#                        "data/rx_adherence"        (per-patient MPR/PDC)
+#                        "data/rx_adherence"        (per-patient MPR/PDC),
+#                        "data/rx_adherence_fixed_window" (fixed-window PDC)
 #
 # Description          : N02 treatment patterns for the matched cohort (both
 #                        arms), over each patient's follow-up window:
 #                          (A) Treatment episodes & persistence
 #                          (B) Lines of therapy (by molecule)
-#                          (C) Adherence: MPR and PDC
+#                          (C) Adherence: MPR and PDC, over each patient's own
+#                              treatment span, then over a fixed 365-day window
+#                              from index (the span version is not comparable
+#                              between arms; see the (C2) block)
 #
 #                        Runs off data/rx_obs, so no Snowflake needed.
 #
@@ -33,7 +37,7 @@
 # Version   Date        Author                  Description
 # -------   ----------  ---------------------   ------------------------------
 # 0.1       2026-07-30  Ryan Irvine             Treatment episodes, LoT, adherence
-# 0.2
+# 0.2       2026-08-12  Ryan Irvine             Fixed-window PDC (cov5_8/cov5_9)
 # 1.0
 ################################################################################
 
@@ -230,10 +234,19 @@ cov5_4 <- cov5_4_full |>
 # Adherent = PDC >= 0.80.
 # ===========================================================================
 # Covered days for one patient: merge overlapping [start, end) intervals and sum.
-union_covered_days <- function(start, end) {
-  ord <- order(start)
-  s <- as.numeric(start[ord])
-  e <- as.numeric(end[ord])
+# win_start / win_end optionally clip the intervals to an observation window.
+union_covered_days <- function(start, end, win_start = NULL, win_end = NULL) {
+  s <- as.numeric(start)
+  e <- as.numeric(end)
+  if (!is.null(win_start)) s <- pmax(s, as.numeric(win_start))
+  if (!is.null(win_end)) e <- pmin(e, as.numeric(win_end))
+  keep <- !is.na(s) & !is.na(e) & e > s
+  if (!any(keep)) return(0)
+  s <- s[keep]
+  e <- e[keep]
+  ord <- order(s)
+  s <- s[ord]
+  e <- e[ord]
   cur_s <- s[1]
   cur_e <- e[1]
   total <- 0
@@ -296,6 +309,60 @@ cov5_7 <- summarize_var(adherence, x = "adherent", group_var = "cohort") |>
   mutate(name = ifelse(row_number() == 1, "Adherent to N02 therapy (PDC >= 0.80), n (%)", name))
 
 # ===========================================================================
+# (C2) ADHERENCE OVER A FIXED WINDOW ----
+# The span-based measures above are not comparable between arms: a patient with
+# a single prescription has span == that one supply and so scores 1.00 by
+# construction, which is why controls out-score cases on cov5_5..cov5_7. Here
+# the denominator is instead a fixed FIXED_WINDOW_DAYS window from index, so
+# every patient is judged over the same amount of time. Coverage is clipped to
+# the window at both ends. Still among treated patients only (rx_obs holds no
+# rows for patients with zero N02 lines).
+# ===========================================================================
+FIXED_WINDOW_DAYS <- 365 # all patients have >= 1 year of follow-up by design
+
+adherence_fw <- rx |>
+  mutate(
+    win_start = as.Date(index_date),
+    win_end = pmin(as.Date(censor_date), as.Date(index_date) + FIXED_WINDOW_DAYS)
+  ) |>
+  filter(event_date < win_end) |>
+  group_by(cohort, person_id) |>
+  summarise(
+    win_start = first(win_start),
+    win_end = first(win_end),
+    covered_fw = union_covered_days(event_date, cov_end, first(win_start), first(win_end)),
+    supply_fw = sum(pmax(
+      pmin(as.numeric(cov_end), as.numeric(first(win_end))) -
+        pmax(as.numeric(event_date), as.numeric(first(win_start))), 0
+    )),
+    .groups = "drop"
+  ) |>
+  mutate(
+    window_days = pmax(as.numeric(win_end - win_start), 1),
+    pdc_fw = pmin(covered_fw / window_days, 1),
+    mpr_fw = pmin(supply_fw / window_days, 1),
+    adherent_fw = ifelse(pdc_fw >= 0.80, "Yes", "No")
+  )
+saveRDS(adherence_fw, "data/rx_adherence_fixed_window")
+
+# cov5_8. PDC over the fixed window
+cov5_8 <- summarize_var(adherence_fw, x = "pdc_fw", group_var = "cohort") |>
+  pivot_wider(names_from = cohort) |>
+  mutate(
+    name = ifelse(!is.na(name), paste0("     ", name), name),
+    name = ifelse(row_number() == 1,
+                  paste0("Proportion of days covered (PDC), fixed ",
+                         FIXED_WINDOW_DAYS, "-day window from index"), name)
+  ) |>
+  select(-`NA`)
+
+# cov5_9. Adherent over the fixed window, n (%)
+cov5_9 <- summarize_var(adherence_fw, x = "adherent_fw", group_var = "cohort") |>
+  mutate(name = ifelse(row_number() == 1,
+                       paste0("Adherent to N02 therapy (PDC >= 0.80), fixed ",
+                              FIXED_WINDOW_DAYS, "-day window, n (%)"), name))
+
+# ===========================================================================
 # Assemble treatment-pattern table ----
 # ===========================================================================
 cov5 <- data.frame(
@@ -308,7 +375,9 @@ cov5 <- data.frame(
   union_all(cov5_4) |>
   union_all(cov5_5) |>
   union_all(cov5_6) |>
-  union_all(cov5_7)
+  union_all(cov5_7) |>
+  union_all(cov5_8) |>
+  union_all(cov5_9)
 
 saveRDS(cov5, "data/cov5")
 print("cov5 (N02 treatment patterns) has been created and saved to data directory.")
