@@ -34,7 +34,13 @@
 ################################################################################
 
 # Global ----
+# Builds the workbook from saved data/ objects only, so it does not need
+# Snowflake. DE_OFFLINE tells 00_global.R to skip the connection and the
+# codelist rebuild; removed straight afterwards so a later program in the same
+# session (runAll.R) still gets a live connection.
+DE_OFFLINE <- TRUE
 source("00_global.R")
+rm(DE_OFFLINE)
 
 # ---------------------------------------------------------------------------
 # Layout constants (match the UK deliverable) ----

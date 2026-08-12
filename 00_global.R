@@ -35,8 +35,18 @@ suppressPackageStartupMessages({
   library(writexl)
 })
 
+# Offline mode ----
+# Programs that work only from saved data/ objects (09_rx_patterns.R,
+# 99_table_output.R, 99_euroboard_appendix.R) can set DE_OFFLINE <- TRUE before
+# sourcing this file. That skips the Snowflake connection, the raw table
+# references and the codelist rebuild, so those programs still run once the DE
+# data licence has ended. Packages, global variables and functions/ still load.
+if (!exists("DE_OFFLINE")) DE_OFFLINE <- FALSE
+
 # Establish Snowflake Connection ----
-if (!exists("con")) {
+if (DE_OFFLINE) {
+  print("DE_OFFLINE = TRUE: skipping Snowflake connection.")
+} else if (!exists("con")) {
   readRenviron(
     "/organon/projects/or_analytics/irvinery/snowflake_passkey.Renviron"
   )
@@ -74,6 +84,20 @@ source_all <- function(folder_path, pattern = "\\.R$") {
 }
 
 source_all("functions")
+
+# Everything below this point needs Snowflake. In offline mode, load the saved
+# codelists instead so downstream programs find the same objects in memory.
+if (DE_OFFLINE) {
+  for (nm in c("diagnosis_codelist", "rx_codelist")) {
+    f <- file.path(data_path, nm)
+    if (file.exists(f)) {
+      assign(nm, readRDS(f))
+    } else {
+      warning("DE_OFFLINE: ", f, " not found; downstream programs may fail.")
+    }
+  }
+  print("DE_OFFLINE = TRUE: using saved codelists, Snowflake tables not loaded.")
+} else {
 
 # Load data from Snowflake ----
 # DE views (V_DE_*), same schema as the UK study.
@@ -227,3 +251,5 @@ rx_codelist <- product |>
   collect()
 saveRDS(rx_codelist, "data/rx_codelist")
 print("rx_codelist has been created and saved to data directory.")
+
+} # end of the Snowflake-only section (see DE_OFFLINE above)

@@ -42,7 +42,13 @@
 ################################################################################
 
 # Step 1. Setup ----
+# This program works entirely from data/rx_obs, so it does not need Snowflake.
+# DE_OFFLINE tells 00_global.R to skip the connection and the codelist rebuild.
+# Removed straight afterwards so a later program in the same session (runAll.R)
+# still gets a live connection.
+DE_OFFLINE <- TRUE
 source("00_global.R")
+rm(DE_OFFLINE)
 
 DEFAULT_DAYS_SUPPLY <- 30 # used when duration is missing / <= 0
 GRACE_DAYS <- 30 # a gap > coverage + GRACE ends an episode / line

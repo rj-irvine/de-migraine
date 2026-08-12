@@ -255,6 +255,18 @@ Snowflake), so they can be recalibrated after the licence ends:
 and `data/rx_detail_raw` (prescription_detail, if the view resolved). Any further
 Rx analysis should be re-derived OFFLINE from these, NOT re-queried.
 
+**`DE_OFFLINE` switch (00_global.R):** sourcing `00_global.R` used to open a
+Snowflake connection and rebuild both codelists unconditionally, so "runs
+offline" was only true of the analysis, not of the program. Set
+`DE_OFFLINE <- TRUE` before the `source()` call to skip the connection, the
+`tbl(con, ...)` references and the codelist rebuild; packages, globals and
+`functions/` still load, and the saved codelists are read from `data/` instead.
+Defaults to FALSE, so 00..08 are unaffected. Already set in `09_rx_patterns.R`,
+`99_table_output.R` and `99_euroboard_appendix.R` — none of them touch `con`.
+Each one `rm()`s the flag straight after sourcing, because `runAll.R` sources
+every program into the same global env and a leaked TRUE would break a later
+`08_rx.R` on a missing `contact_prescriptions`.
+
 **IN-list cap caveat:** the N02 `product_id` filter uses `%in% local(...)`, which
 is safe only because the N02 product list is small (<<200k). Never do this with
 a large key set (see §1) — the 485k patient list hit Snowflake's 200k cap.
