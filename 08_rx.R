@@ -21,7 +21,8 @@
 #                        the matched cohort, both arms, within each person's
 #                        follow-up window (index_date < event_date <= censor_date).
 #
-#                        Analyses (cov4_1..cov4_11, by cohort):
+#                        Analyses (cov4_0..cov4_11, by cohort):
+#                          cov4_0  Patients with >=1 N02 Rx, n (%)
 #                          cov4_1  Number of N02 Rx per patient
 #                          cov4_2  N02 Rx lines by ATC code
 #                          cov4_3  Index (first-line) N02 subgroup, n (%)
@@ -47,6 +48,7 @@
 # 0.1       2026-07-17  Ryan Irvine             New DE prescription objective
 # 0.2       2026-07-30  Ryan Irvine             Treatment patterns + line-level
 #                                               extracts
+# 0.3       2026-08-12  Ryan Irvine             cov4_0 treated-population count
 # 1.0
 ################################################################################
 
@@ -159,6 +161,21 @@ person_window <- match_windows |>
 n02_per_person <- rx_obs |>
   group_by(cohort, person_id) |>
   summarise(n_rx = n(), total_qty = sum(quantity, na.rm = TRUE), .groups = "drop")
+
+# ---------------------------------------------------------------------------
+# cov4_0. Patients with >=1 N02 prescription, n (%) ----
+# Treated-population size. Denominator is the full arm, so patients with no N02
+# line count as "No". This is the counted denominator behind cov4_1/4_5/4_6,
+# which are all reported among patients with >=1.
+# ---------------------------------------------------------------------------
+any_n02 <- person_window |>
+  left_join(n02_per_person |> select(person_id, cohort, n_rx),
+            by = c("person_id", "cohort")) |>
+  mutate(any_n02 = ifelse(is.na(n_rx), "No", "Yes"))
+
+cov4_0 <- summarize_var(any_n02, x = "any_n02", group_var = "cohort") |>
+  mutate(name = ifelse(row_number() == 1,
+                       "Patients with >=1 N02 prescription, n (%)", name))
 
 cov4_1 <- summarize_var(n02_per_person, x = "n_rx", group_var = "cohort") |>
   pivot_wider(names_from = cohort) |>
@@ -381,6 +398,7 @@ cov4 <- data.frame(
   name = "To assess N02 (analgesic) prescription patterns, incl. N02C antimigraine, of headache disorder patients",
   case = NA, control = NA
 ) |>
+  union_all(cov4_0) |>
   union_all(cov4_1) |>
   union_all(cov4_2) |>
   union_all(cov4_3) |>
