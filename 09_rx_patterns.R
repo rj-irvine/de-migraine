@@ -38,6 +38,8 @@
 # -------   ----------  ---------------------   ------------------------------
 # 0.1       2026-07-30  Ryan Irvine             Treatment episodes, LoT, adherence
 # 0.2       2026-08-12  Ryan Irvine             Fixed-window PDC (cov5_8/cov5_9)
+# 0.3       2026-08-13  Ryan Irvine             Keep zero-coverage patients in the
+#                                               fixed-window denominator
 # 1.0
 ################################################################################
 
@@ -323,6 +325,11 @@ cov5_7 <- summarize_var(adherence, x = "adherent", group_var = "cohort") |>
 # every patient is judged over the same amount of time. Coverage is clipped to
 # the window at both ends. Still among treated patients only (rx_obs holds no
 # rows for patients with zero N02 lines).
+#
+# Patients whose prescriptions all fall after the window are kept, not filtered:
+# their coverage clips to nothing and they score PDC 0, which is the true value.
+# Dropping them would bias the arms differently (they are a much larger share of
+# controls than of cases) and so recreate the very imbalance this block fixes.
 # ===========================================================================
 FIXED_WINDOW_DAYS <- 365 # all patients have >= 1 year of follow-up by design
 
@@ -331,7 +338,6 @@ adherence_fw <- rx |>
     win_start = as.Date(index_date),
     win_end = pmin(as.Date(censor_date), as.Date(index_date) + FIXED_WINDOW_DAYS)
   ) |>
-  filter(event_date < win_end) |>
   group_by(cohort, person_id) |>
   summarise(
     win_start = first(win_start),
