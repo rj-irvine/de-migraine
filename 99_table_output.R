@@ -348,22 +348,48 @@ if (file.exists("data/cov5")) {
   style_objective_rows(wb, "T4. N02 Treatment Patterns", cov5,
                        value_cols = c("case", "control"), first_data_row = fd2)
 
-  # Days-supply methods note.
+  # Days-supply methods note. Every row below the lines-of-therapy block is
+  # measured in days, so the reader needs to know where those days came from.
   if (file.exists("data/rx_daysupply_diag")) {
     diag <- readRDS("data/rx_daysupply_diag")
+
+    imputed_txt <- ""
+    if (file.exists("data/rx_daysupply_source")) {
+      src <- readRDS("data/rx_daysupply_source")
+      pct_imp <- src |>
+        group_by(cohort) |>
+        summarise(pct = round(sum(pct[source != "observed"]), 0), .groups = "drop")
+      imputed_txt <- paste0(
+        " It is absent on ",
+        paste(paste0(pct_imp$pct, "% of ", pct_imp$cohort, " lines"),
+              collapse = " and "),
+        ", and those lines take the median observed duration for their own ATC",
+        " code rather than a single flat value, so the differing drug mix",
+        " between the arms is carried through."
+      )
+    }
+
     note_row <- ROW0 + 3 + nrow(cov5) + 2
     writeData(
       wb, "T4. N02 Treatment Patterns",
-      paste0("Days-supply based on prescription duration (median = ",
-             round(diag$duration_median, 0),
-             " days; missing set to 30d), with a 30-day grace period."),
+      paste0(
+        "Days supply comes from the prescription duration field, which is ",
+        "recorded in days (median = ", round(diag$duration_median, 0), ").",
+        imputed_txt,
+        " Episodes and lines of therapy use a 30-day grace period. The ",
+        "coverage-based rows (persistence, MPR, PDC) should be read with care ",
+        "for as-needed treatment: migraine-specific (N02C) drugs carry a ",
+        "duration on only about 3% of lines because they are taken at the ",
+        "onset of an attack rather than on a daily schedule, so a measure ",
+        "built on days covered does not describe them well."
+      ),
       startRow = note_row, startCol = COL0
     )
     mergeCells(wb, "T4. N02 Treatment Patterns",
                cols = COL0:(COL0 + 2), rows = note_row)
     addStyle(wb, "T4. N02 Treatment Patterns", st_footnote,
              rows = note_row, cols = COL0:(COL0 + 2), gridExpand = TRUE)
-    setRowHeights(wb, "T4. N02 Treatment Patterns", rows = note_row, heights = 40)
+    setRowHeights(wb, "T4. N02 Treatment Patterns", rows = note_row, heights = 90)
   }
 }
 

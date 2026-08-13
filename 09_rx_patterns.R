@@ -13,7 +13,9 @@
 #                        "data/rx_episodes"         (constructed episodes),
 #                        "data/rx_lot"              (lines of therapy),
 #                        "data/rx_adherence"        (per-patient MPR/PDC),
-#                        "data/rx_adherence_fixed_window" (fixed-window PDC)
+#                        "data/rx_adherence_fixed_window" (fixed-window PDC),
+#                        "data/atc_duration_lookup" (per-ATC median duration),
+#                        "data/rx_daysupply_source" (observed vs imputed split)
 #
 # Description          : N02 treatment patterns for the matched cohort (both
 #                        arms), over each patient's follow-up window:
@@ -26,10 +28,12 @@
 #
 #                        Runs off data/rx_obs, so no Snowflake needed.
 #
-#                        Days-supply comes from the `duration` field (days),
-#                        with a 30-day fallback and a 30-day grace period. Both
-#                        live in days_supply() / the constants below, so change
-#                        them in one place if needed.
+#                        Days supply comes from the `duration` field (days).
+#                        Where it is missing the line takes the median observed
+#                        duration for its own ATC code rather than a flat
+#                        constant; see the Days supply block below for why.
+#                        Grace period is 30 days. Both live in the constants
+#                        below, so change them in one place if needed.
 #
 ###############################################################################
 #                          REVISION / VERSION HISTORY                         #
@@ -42,6 +46,8 @@
 #                                               fixed-window denominator
 # 0.4       2026-08-13  Ryan Irvine             union_covered_days() moved to
 #                                               functions/ (shared with 10)
+# 0.5       2026-08-13  Ryan Irvine             Days supply imputed per ATC code
+#                                               instead of a flat 30 days
 # 1.0
 ################################################################################
 
@@ -54,25 +60,80 @@ DE_OFFLINE <- TRUE
 source("00_global.R")
 rm(DE_OFFLINE)
 
-DEFAULT_DAYS_SUPPLY <- 30 # used when duration is missing / <= 0
 GRACE_DAYS <- 30 # a gap > coverage + GRACE ends an episode / line
-
-# Days-supply from the duration field, with a fallback.
-days_supply <- function(duration) {
-  d <- suppressWarnings(as.numeric(duration))
-  ifelse(is.na(d) | d <= 0, DEFAULT_DAYS_SUPPLY, d)
-}
+MIN_ATC_OBS <- 50 # observed durations needed before an ATC median is trusted
+DEFAULT_DAYS_SUPPLY <- 30 # last resort only: no ATC median and no global median
 
 rx_obs <- readRDS("data/rx_obs")
 
+# ---------------------------------------------------------------------------
+# Days supply ----
+# `duration` is in days (confirmed: frequency_code "J" is a unit marker meaning
+# day), but only ~24% of N02 lines carry one, and whether a line carries one is
+# driven almost entirely by the drug rather than the patient - see
+# 11_duration_missingness.R. Recording rates by class are near-identical across
+# arms (opioids 35%/36%, everyday analgesics 28%/31%, migraine-specific
+# 3.3%/5.5%); cases only look worse overall because they receive far more
+# migraine-specific drugs, which are taken as needed and so rarely carry a
+# duration at all.
+#
+# A single flat fallback therefore flattened away exactly the variation that
+# distinguishes the arms, and manufactured roughly 60% of the case/control
+# coverage gap out of drug mix. Each missing line instead takes the median
+# observed duration for its own ATC code, so the differing drug mix is carried
+# through. Codes with fewer than MIN_ATC_OBS observed durations fall back to
+# the global median, and DEFAULT_DAYS_SUPPLY is a last resort that should not
+# normally be reached.
+#
+# Caveats that survive this and belong on any output built from it: about
+# three quarters of case lines are still imputed, just better; for the
+# migraine-specific drugs the median rests on the ~3% of lines that happened to
+# carry a duration, which may not be typical; and `duration` counts days of
+# administration, not days of coverage, so it understates depot products such
+# as the monthly CGRP antibodies.
+# ---------------------------------------------------------------------------
+rx_dur <- rx_obs |>
+  mutate(
+    duration_num = suppressWarnings(as.numeric(duration)),
+    duration_observed = !is.na(duration_num) & duration_num > 0
+  )
+
+atc_duration_lookup <- rx_dur |>
+  filter(duration_observed) |>
+  group_by(product_atc_code) |>
+  summarise(n_observed = n(), atc_median = median(duration_num), .groups = "drop") |>
+  filter(n_observed >= MIN_ATC_OBS)
+saveRDS(atc_duration_lookup, "data/atc_duration_lookup")
+
+global_median_duration <- median(rx_dur$duration_num[rx_dur$duration_observed])
+
 # Order lines within patient (the constructs below depend on this order).
-rx <- rx_obs |>
+rx <- rx_dur |>
+  left_join(atc_duration_lookup, by = "product_atc_code") |>
   mutate(
     event_date = as.Date(event_date),
-    day_supply = days_supply(duration),
+    day_supply = case_when(
+      duration_observed ~ duration_num,
+      !is.na(atc_median) ~ atc_median,
+      !is.na(global_median_duration) ~ global_median_duration,
+      TRUE ~ DEFAULT_DAYS_SUPPLY
+    ),
     cov_end = event_date + day_supply
   ) |>
   arrange(cohort, person_id, event_date, num_sequence, product_atc_code)
+
+# Provenance of the days supply, so the imputed share can be quoted directly.
+rx_daysupply_source <- rx |>
+  mutate(source = case_when(
+    duration_observed ~ "observed",
+    !is.na(atc_median) ~ "ATC median",
+    TRUE ~ "global median"
+  )) |>
+  count(cohort, source, name = "n_lines") |>
+  group_by(cohort) |>
+  mutate(pct = round(100 * n_lines / sum(n_lines), 1)) |>
+  ungroup()
+saveRDS(rx_daysupply_source, "data/rx_daysupply_source")
 
 # ===========================================================================
 # Step 2. Days-supply diagnostics ----
