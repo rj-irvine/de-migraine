@@ -1,0 +1,222 @@
+
+> cat("Does the fixed adherence window sit inside the prescribing data?\n")
+Does the fixed adherence window sit inside the prescribing data?
+
+> cat("Run:", format(Sys.time(), "%Y-%m-%d %H:%M"), "\n")
+Run: 2026-08-13 13:16 
+
+> cat(strrep("=", 78), "\n")
+============================================================================== 
+
+> # ===========================================================================
+> # A. When does N02 prescribing data start? ----
+> # rx_lines_raw is  .... [TRUNCATED] 
+
+
+A. WHEN DOES N02 PRESCRIBING DATA START?
+
+> cat(strrep("-", 78), "\n")
+------------------------------------------------------------------------------ 
+
+> cat("Study StartDate:", format(StartDate), "\n")
+Study StartDate: 2016-12-01 
+
+> rx_lines_raw <- readRDS("data/rx_lines_raw")
+
+> rx_lines_raw <- rx_lines_raw |> mutate(event_date = as.Date(event_date))
+
+> out$raw_by_year <- rx_lines_raw |>
++   mutate(year = as.integer(format(event_date, "%Y"))) |>
++   count(year, name = "n_lines") |>
++   arrange(year)
+
+> show(out$raw_by_year, "All N02 lines (no window filter) by year")
+
+All N02 lines (no window filter) by year
+ year n_lines
+ 2021 1218604
+ 2022 1862927
+ 2023 2151088
+ 2024 2021995
+ 2025 1147215
+
+> rx_data_start <- min(rx_lines_raw$event_date, na.rm = TRUE)
+
+> cat("\nEarliest N02 prescription anywhere in the extract:", format(rx_data_start), "\n")
+
+Earliest N02 prescription anywhere in the extract: 2021-01-01 
+
+> cat("Gap between study start and first prescription:",
++     as.integer(rx_data_start - StartDate), "days\n")
+Gap between study start and first prescription: 1492 days
+
+> cat("\nA gap of years means the prescribing source starts late, and every\n")
+
+A gap of years means the prescribing source starts late, and every
+
+> cat("window closing before that date is empty for reasons of data coverage.\n")
+window closing before that date is empty for reasons of data coverage.
+
+> # ===========================================================================
+> # B. Index date distribution ----
+> # ============================== .... [TRUNCATED] 
+
+
+B. INDEX DATE DISTRIBUTION
+
+> cat(strrep("-", 78), "\n")
+------------------------------------------------------------------------------ 
+
+> patpop_matched <- readRDS("data/patpop_matched")
+
+> match_windows <- bind_rows(
++   patpop_matched |>
++     transmute(person_id = person_id_case, cohort = "case",
++               index_date, censor_da .... [TRUNCATED] 
+
+> out$index_by_year <- match_windows |>
++   count(cohort, index_year, name = "n_patients") |>
++   arrange(index_year, cohort)
+
+> show(out$index_by_year, "Matched patients by index year")
+
+Matched patients by index year
+  cohort index_year n_patients
+    case       2021      86734
+ control       2021      86734
+    case       2022      98563
+ control       2022      98563
+    case       2023      40479
+ control       2023      40479
+    case       2024      16704
+ control       2024      16704
+    case       2025          6
+ control       2025          6
+
+> # ===========================================================================
+> # C. How many fixed windows close before prescribing data begins? -- .... [TRUNCATED] 
+
+
+C. WINDOWS THAT CLOSE BEFORE THE DATA STARTS
+
+> cat(strrep("-", 78), "\n")
+------------------------------------------------------------------------------ 
+
+> match_windows <- match_windows |>
++   mutate(
++     window_status = case_when(
++       win_end <= rx_data_start ~ "entirely before data",
++       in .... [TRUNCATED] 
+
+> out$window_status <- match_windows |>
++   count(cohort, window_status, name = "n_patients") |>
++   group_by(cohort) |>
++   mutate(pct = round(100 *  .... [TRUNCATED] 
+
+> show(out$window_status, "Fixed 365-day window vs prescribing data coverage")
+
+Fixed 365-day window vs prescribing data coverage
+  cohort     window_status n_patients pct
+    case fully inside data     242486 100
+ control fully inside data     242486 100
+
+> out$window_status_year <- match_windows |>
++   filter(cohort == "case") |>
++   count(index_year, window_status, name = "n_patients") |>
++   group_by .... [TRUNCATED] 
+
+> show(out$window_status_year, "Same, by index year (cases)")
+
+Same, by index year (cases)
+ index_year     window_status n_patients pct
+       2021 fully inside data      86734 100
+       2022 fully inside data      98563 100
+       2023 fully inside data      40479 100
+       2024 fully inside data      16704 100
+       2025 fully inside data          6 100
+
+> # Treated patients only, the population cov5_8/cov5_9 actually report on.
+> rx_obs <- readRDS("data/rx_obs")
+
+> treated <- rx_obs |> distinct(cohort, person_id)
+
+> out$treated_window_status <- match_windows |>
++   inner_join(treated, by = c("cohort", "person_id")) |>
++   count(cohort, window_status, name = "n_p ..." ... [TRUNCATED] 
+
+> show(out$treated_window_status,
++      "Same, among treated patients (the cov5_8/cov5_9 denominator)")
+
+Same, among treated patients (the cov5_8/cov5_9 denominator)
+  cohort     window_status n_patients pct
+    case fully inside data     123330 100
+ control fully inside data      44471 100
+
+> # ===========================================================================
+> # D. Fixed-window PDC restricted to usable windows ----
+> # ======== .... [TRUNCATED] 
+
+
+D. ADHERENCE ON USABLE WINDOWS ONLY
+
+> cat(strrep("-", 78), "\n")
+------------------------------------------------------------------------------ 
+
+> rx <- rx_obs |>
++   mutate(
++     event_date = as.Date(event_date),
++     duration_num = suppressWarnings(as.numeric(duration)),
++     observed = !i .... [TRUNCATED] 
+
+> pdc_all <- rx |>
++   mutate(win_start = as.Date(index_date),
++          win_end = pmin(as.Date(censor_date),
++                         as.Date(index .... [TRUNCATED] 
+
+> summarise_pdc <- function(d, label) {
++   d |>
++     group_by(cohort) |>
++     summarise(scenario = label,
++               n_patients = n(),
++       .... [TRUNCATED] 
+
+> out$pdc_by_window <- bind_rows(
++   summarise_pdc(pdc_all, "all treated (reported)"),
++   summarise_pdc(pdc_all |> filter(window_status == "fully in ..." ... [TRUNCATED] 
+
+> show(out$pdc_by_window, "Fixed-window PDC before and after restriction")
+
+Fixed-window PDC before and after restriction
+               scenario  cohort n_patients mean_pdc median_pdc pct_zero pct_adherent
+ all treated (reported)    case     123330     0.12      0.082     37.6         1.52
+ all treated (reported) control      44471     0.08      0.000     55.4         1.50
+    usable windows only    case     123330     0.12      0.082     37.6         1.52
+    usable windows only control      44471     0.08      0.000     55.4         1.50
+
+> out$pdc_by_status <- pdc_all |>
++   group_by(cohort, window_status) |>
++   summarise(n_patients = n(), mean_pdc = round(mean(pdc_fw), 3),
++          .... [TRUNCATED] 
+
+> show(out$pdc_by_status, "Coverage by window status")
+
+Coverage by window status
+  cohort     window_status n_patients mean_pdc pct_zero
+    case fully inside data     123330     0.12     37.6
+ control fully inside data      44471     0.08     55.4
+
+> cat("\nIf 'entirely before data' patients are overwhelmingly at zero coverage,\n")
+
+If 'entirely before data' patients are overwhelmingly at zero coverage,
+
+> cat("the reported adherence figure is measuring data availability.\n")
+the reported adherence figure is measuring data availability.
+
+> cat("\n", strrep("=", 78), "\n")
+
+ ============================================================================== 
+
+> cat("End of report.\n")
+End of report.
+
+> sink()
