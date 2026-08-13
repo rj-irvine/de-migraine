@@ -238,7 +238,7 @@ toc <- data.frame(
     "Patient selection / attrition flow",
     "Continuous and discrete outcome measures (GP visits, demographics)",
     "N02 (analgesic) prescription counts & patterns, incl. N02C antimigraine",
-    "Treatment episodes, lines of therapy, and adherence (MPR/PDC)",
+    "Treatment episodes, lines of therapy, and adherence (fixed-window PDC)",
     "Distribution of annualized all-cause GP visits by cohort",
     "Codelist used to identify headache disorder patients (ICD-10)",
     "N02 (analgesic) products used for the prescription objective (ATC)"
@@ -377,7 +377,7 @@ if (file.exists("data/cov5")) {
         "recorded in days (median = ", round(diag$duration_median, 0), ").",
         imputed_txt,
         " Episodes and lines of therapy use a 30-day grace period. The ",
-        "coverage-based rows (persistence, MPR, PDC) should be read with care ",
+        "coverage-based rows (persistence and PDC) should be read with care ",
         "for as-needed treatment: migraine-specific (N02C) drugs carry a ",
         "duration on only about 3% of lines because they are taken at the ",
         "onset of an attack rather than on a daily schedule, so a measure ",

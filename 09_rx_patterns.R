@@ -21,10 +21,11 @@
 #                        arms), over each patient's follow-up window:
 #                          (A) Treatment episodes & persistence
 #                          (B) Lines of therapy (by molecule)
-#                          (C) Adherence: MPR and PDC, over each patient's own
-#                              treatment span, then over a fixed 365-day window
-#                              from index (the span version is not comparable
-#                              between arms; see the (C2) block)
+#                          (C) Adherence over each patient's own treatment
+#                              span. Computed and saved as working, but NOT
+#                              reported: it is not comparable between arms.
+#                          (C2) Adherence over a fixed 365-day window from
+#                              index. This is the reported version.
 #
 #                        Runs off data/rx_obs, so no Snowflake needed.
 #
@@ -48,6 +49,8 @@
 #                                               functions/ (shared with 10)
 # 0.5       2026-08-13  Ryan Irvine             Days supply imputed per ATC code
 #                                               instead of a flat 30 days
+# 0.6       2026-08-13  Ryan Irvine             Drop the span-based MPR/PDC rows
+#                                               from the table (not comparable)
 # 1.0
 ################################################################################
 
@@ -298,11 +301,21 @@ cov5_4 <- cov5_4_full |>
   union_all(cov5_4_other)
 
 # ===========================================================================
-# (C) ADHERENCE: MPR and PDC ----
+# (C) ADHERENCE OVER EACH PATIENT'S OWN SPAN ----
 # Over each patient's span (first Rx to last coverage end):
 #   MPR = total days-supply / span days      (capped at 1)
 #   PDC = distinct covered days / span days
 # Adherent = PDC >= 0.80.
+#
+# NOT REPORTED. These are computed and saved to data/rx_adherence as working,
+# but deliberately kept out of the cov5 table, because they are not comparable
+# between arms: a patient with a single prescription has a span equal to that
+# one supply and so scores 1.00 by construction. That is why controls appear
+# far more adherent than cases on this measure (MPR 0.73 vs 0.52, 61.9% vs
+# 39.0% adherent) while the fixed-window measure in (C2) - which judges every
+# patient over the same amount of time - shows no difference at all. Printing
+# both invited the reader to take the wrong one. Use (C2) for anything
+# reported; keep these only for methods discussion.
 # ===========================================================================
 # union_covered_days() now lives in functions/union_covered_days.R (sourced by
 # 00_global.R) so 10_daysupply_check.R can reuse the identical logic.
@@ -329,34 +342,16 @@ adherence <- rx |>
   )
 saveRDS(adherence, "data/rx_adherence")
 
-# cov5_5. Medication possession ratio (MPR), capped at 1
-cov5_5 <- summarize_var(adherence, x = "mpr", group_var = "cohort") |>
-  pivot_wider(names_from = cohort) |>
-  mutate(
-    name = ifelse(!is.na(name), paste0("     ", name), name),
-    name = ifelse(row_number() == 1, "Medication possession ratio (MPR), capped at 1", name)
-  ) |>
-  select(-`NA`)
-
-# cov5_6. Proportion of days covered (PDC)
-cov5_6 <- summarize_var(adherence, x = "pdc", group_var = "cohort") |>
-  pivot_wider(names_from = cohort) |>
-  mutate(
-    name = ifelse(!is.na(name), paste0("     ", name), name),
-    name = ifelse(row_number() == 1, "Proportion of days covered (PDC)", name)
-  ) |>
-  select(-`NA`)
-
-# cov5_7. Adherent (PDC >= 0.80), n (%)
-cov5_7 <- summarize_var(adherence, x = "adherent", group_var = "cohort") |>
-  mutate(name = ifelse(row_number() == 1, "Adherent to N02 therapy (PDC >= 0.80), n (%)", name))
+# No cov5_5/6/7. The span-based summaries that used to sit here were dropped
+# from the table for the reason given above; data/rx_adherence still holds the
+# per-patient values if they are ever needed. Numbering of the blocks below is
+# left unchanged so it keeps matching the header and the revision history.
 
 # ===========================================================================
 # (C2) ADHERENCE OVER A FIXED WINDOW ----
-# The span-based measures above are not comparable between arms: a patient with
-# a single prescription has span == that one supply and so scores 1.00 by
-# construction, which is why controls out-score cases on cov5_5..cov5_7. Here
-# the denominator is instead a fixed FIXED_WINDOW_DAYS window from index, so
+# The span-based measures above are not comparable between arms, which is why
+# they are computed but not reported. Here the denominator is instead a fixed
+# FIXED_WINDOW_DAYS window from index, so
 # every patient is judged over the same amount of time. Coverage is clipped to
 # the window at both ends. Still among treated patients only (rx_obs holds no
 # rows for patients with zero N02 lines).
@@ -420,9 +415,6 @@ cov5 <- data.frame(
   union_all(cov5_2) |>
   union_all(cov5_3) |>
   union_all(cov5_4) |>
-  union_all(cov5_5) |>
-  union_all(cov5_6) |>
-  union_all(cov5_7) |>
   union_all(cov5_8) |>
   union_all(cov5_9)
 
