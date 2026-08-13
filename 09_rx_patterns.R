@@ -40,6 +40,8 @@
 # 0.2       2026-08-12  Ryan Irvine             Fixed-window PDC (cov5_8/cov5_9)
 # 0.3       2026-08-13  Ryan Irvine             Keep zero-coverage patients in the
 #                                               fixed-window denominator
+# 0.4       2026-08-13  Ryan Irvine             union_covered_days() moved to
+#                                               functions/ (shared with 10)
 # 1.0
 ################################################################################
 
@@ -241,36 +243,8 @@ cov5_4 <- cov5_4_full |>
 #   PDC = distinct covered days / span days
 # Adherent = PDC >= 0.80.
 # ===========================================================================
-# Covered days for one patient: merge overlapping [start, end) intervals and sum.
-# win_start / win_end optionally clip the intervals to an observation window.
-union_covered_days <- function(start, end, win_start = NULL, win_end = NULL) {
-  s <- as.numeric(start)
-  e <- as.numeric(end)
-  if (!is.null(win_start)) s <- pmax(s, as.numeric(win_start))
-  if (!is.null(win_end)) e <- pmin(e, as.numeric(win_end))
-  keep <- !is.na(s) & !is.na(e) & e > s
-  if (!any(keep)) return(0)
-  s <- s[keep]
-  e <- e[keep]
-  ord <- order(s)
-  s <- s[ord]
-  e <- e[ord]
-  cur_s <- s[1]
-  cur_e <- e[1]
-  total <- 0
-  if (length(s) > 1) {
-    for (i in 2:length(s)) {
-      if (s[i] <= cur_e) {
-        if (e[i] > cur_e) cur_e <- e[i]
-      } else {
-        total <- total + (cur_e - cur_s)
-        cur_s <- s[i]
-        cur_e <- e[i]
-      }
-    }
-  }
-  total + (cur_e - cur_s)
-}
+# union_covered_days() now lives in functions/union_covered_days.R (sourced by
+# 00_global.R) so 10_daysupply_check.R can reuse the identical logic.
 
 # Distinct covered-day count per patient via the interval union above.
 covered_days <- rx |>
