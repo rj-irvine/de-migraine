@@ -1,0 +1,68 @@
+DE MIGRAINE / HEADACHE STUDY (25P01)
+Update summary - 14 August 2026
+Prepared by Ryan Irvine (CDS) for Paula Chu (OR)
+
+
+WHAT CHANGED
+
+- Adherence denominator corrected. Patients whose first painkiller
+  prescription came more than a year after diagnosis were being dropped from
+  the adherence calculation rather than counted as having no coverage. They
+  were a much larger share of the control group (55%) than of the headache
+  group (38%), so excluding them made controls look more adherent than they
+  are. With them included, the two groups are the same.
+
+- Prescription length is now estimated drug by drug. The data records how long
+  to take the medication on only a quarter of prescriptions. Every missing one
+  used to be filled in with a flat 30 days; each is now filled in with the
+  typical length recorded for that same drug. The flat value was erasing the
+  fact that the two groups receive different drugs, and accounted for roughly
+  60% of the apparent difference in treatment coverage between them.
+
+- Treatment length can now be reported. It previously came out as exactly 30
+  days for everyone with no variation at all, which was the filled-in value
+  showing through rather than a real finding. A first course of treatment now
+  runs 13 days in both groups, and two thirds of first courses consist of a
+  single prescription with nothing after it.
+
+- Two competing adherence measures reduced to one. Table 4 showed adherence
+  measured over each patient's own treatment period alongside adherence
+  measured over a fixed year. The first gives a perfect score to anyone with a
+  single prescription, which made controls appear far more adherent than
+  headache patients. It has been removed; the fixed-year measure remains.
+
+- Study period corrected to January 2021. The German data does not reach back
+  to December 2016, which was carried over from the UK study. No patient is
+  diagnosed before 2021. The workbook and the deck now agree. Patient counts
+  are unaffected.
+
+
+WHAT IT MEANS
+
+- The main findings are unchanged. Headache patients receive far more
+  painkillers, far more of it migraine-specific, have more separate courses of
+  treatment (3.3 against 1.9), and a third work through four or more drugs
+  against 18% of controls. These were tested against every alternative
+  assumption about prescription length and did not move.
+
+- Adherence cannot be compared between the groups, and should not be presented
+  as a finding. Measured on equal terms, 1.6% of headache patients and 1.9% of
+  controls have medication for at least 80% of the year. That is not evidence
+  of poor adherence. It is a measure designed for drugs taken every day being
+  applied to migraine drugs taken only when an attack starts. Migraine-specific
+  drugs carry a treatment duration on just 3% of prescriptions for that same
+  reason.
+
+
+STILL OUTSTANDING
+
+- The prescription quantity field is unusable, so total volume dispensed is not
+  reported.
+- Over-the-counter painkiller use is not captured anywhere, so real painkiller
+  use is higher than any figure in the study.
+
+
+FILES UPDATED
+
+- results/DE_Migraine_Headache_Results.xlsx - Table 4 and the Table 1 dates
+- documents/DE_Migraine_Treatment_Patterns_Summary.pptx - slides 2, 9, 10, 11

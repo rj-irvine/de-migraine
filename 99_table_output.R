@@ -262,8 +262,20 @@ write_styled_table(
 # ---------------------------------------------------------------------------
 # Table 1. Attrition Flow ----
 # ---------------------------------------------------------------------------
+# The attrition labels were built with StartDate (Dec 01 2016), inherited from
+# the UK study. The German extract does not go back that far: the earliest
+# record of any kind is Jan 2021, and no patient is indexed before then, so the
+# Dec 2016 cut-off excluded nobody and quoting it overstates the study period.
+# The counts are unaffected. 01_patpop_cohort1.R builds these labels and needs
+# Snowflake, so it cannot be re-run; the date is corrected here instead.
+DE_DATA_START <- as.Date("2021-01-01")
+
 table1_fmt <- readRDS("data/table1") |>
-  mutate(value = prettyNum(value, big.mark = ",")) |>
+  mutate(
+    label = gsub(format(StartDate, "%b %d %Y"),
+                 format(DE_DATA_START, "%b %d %Y"), label, fixed = TRUE),
+    value = prettyNum(value, big.mark = ",")
+  ) |>
   rename(Criteria = label, N = value)
 
 last1 <- write_styled_table(
@@ -280,13 +292,15 @@ foot_row <- last1 + 2
 writeData(
   wb, "T1. Attrition Flow",
   paste0("Headache disorder and non-headache disorder patients are matched ",
-         "on: gender, care site, and year of birth (± 2 years)."),
+         "on: gender, care site, and year of birth (± 2 years). The German ",
+         "data begins in January 2021, so all patients are diagnosed and ",
+         "followed from that point onwards."),
   startRow = foot_row, startCol = COL0
 )
 mergeCells(wb, "T1. Attrition Flow", cols = COL0:(COL0 + 1), rows = foot_row)
 addStyle(wb, "T1. Attrition Flow", st_footnote, rows = foot_row,
          cols = COL0:(COL0 + 1), gridExpand = TRUE)
-setRowHeights(wb, "T1. Attrition Flow", rows = foot_row, heights = 28)
+setRowHeights(wb, "T1. Attrition Flow", rows = foot_row, heights = 42)
 
 # ---------------------------------------------------------------------------
 # Table 2. Outcome Variables (GP visits + demographics) ----
