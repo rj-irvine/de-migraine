@@ -51,6 +51,8 @@
 #                                               instead of a flat 30 days
 # 0.6       2026-08-13  Ryan Irvine             Drop the span-based MPR/PDC rows
 #                                               from the table (not comparable)
+# 0.7       2026-08-14  Ryan Irvine             Fix cov5_4 ordering: control-only
+#                                               molecules no longer sort first
 # 1.0
 ################################################################################
 
@@ -267,6 +269,18 @@ cov5_3 <- summarize_var(lines_per_patient, x = "n_lines_cat", group_var = "cohor
   mutate(name = ifelse(row_number() == 1, "Number of N02 lines of therapy per patient, n (%)", name))
 
 # cov5_4. Molecule at first line of therapy (top 6 + Other), n (%)
+# Ranked by how many CASES started on the molecule, since the objective is to
+# characterise treatment of headache patients.
+#
+# The header row and a control-only molecule both have an empty case cell, so
+# a single "missing means put it first" rule cannot tell them apart. It used to
+# treat both as 99999, which sorted molecules that no headache patient ever
+# started on to the very top of the block - ahead of metamizole - where they
+# also consumed one of the limited molecule slots and pushed a real molecule
+# into "Other molecule". The header is now pinned explicitly, and a molecule
+# with no case patients ranks 0 so it falls into "Other molecule".
+N_TOP_MOLECULES <- 6
+
 lot1 <- rx_lot |>
   group_by(cohort, person_id) |>
   arrange(line_no, .by_group = TRUE) |>
@@ -275,14 +289,16 @@ lot1 <- rx_lot |>
 
 cov5_4_full <- summarize_var(lot1, x = "molecule", group_var = "cohort") |>
   mutate(
+    is_header = is.na(name),
     order = case |> str_extract("^[0-9,]+") |> str_replace_all(",", "") |> as.numeric(),
-    name = ifelse(is.na(name), "Molecule at first line of therapy, n (%)", name),
-    order = ifelse(is.na(order), 99999, order)
+    name = ifelse(is_header, "Molecule at first line of therapy, n (%)", name),
+    order = ifelse(is_header, Inf, ifelse(is.na(order), 0, order))
   ) |>
   arrange(desc(order))
 
+# Everything past the header plus the top N is pooled into "Other molecule".
 cov5_4_other <- cov5_4_full |>
-  filter(row_number() >= 7) |>
+  filter(row_number() >= N_TOP_MOLECULES + 2) |>
   mutate(name = "     Other molecule") |>
   mutate(
     case_num = case |> str_extract("^[0-9,]+") |> str_replace_all(",", "") |> as.numeric(),
@@ -296,7 +312,7 @@ cov5_4_other <- cov5_4_full |>
   )
 
 cov5_4 <- cov5_4_full |>
-  filter(between(row_number(), 1, 6)) |>
+  filter(between(row_number(), 1, N_TOP_MOLECULES + 1)) |> # +1 for the header
   select(name, case, control) |>
   union_all(cov5_4_other)
 
