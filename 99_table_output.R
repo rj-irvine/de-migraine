@@ -387,6 +387,10 @@ if (file.exists("data/cov5")) {
     writeData(
       wb, "T4. N02 Treatment Patterns",
       paste0(
+        "Persistence is how long a patient stays on treatment before stopping ",
+        "or switching. Adherence is whether they keep taking it once started, ",
+        "measured here as the proportion of days covered (PDC): the share of a ",
+        "fixed year on which the patient had medication in hand. ",
         "Days supply comes from the prescription duration field, which is ",
         "recorded in days (median = ", round(diag$duration_median, 0), ").",
         imputed_txt,
@@ -403,7 +407,7 @@ if (file.exists("data/cov5")) {
                cols = COL0:(COL0 + 2), rows = note_row)
     addStyle(wb, "T4. N02 Treatment Patterns", st_footnote,
              rows = note_row, cols = COL0:(COL0 + 2), gridExpand = TRUE)
-    setRowHeights(wb, "T4. N02 Treatment Patterns", rows = note_row, heights = 90)
+    setRowHeights(wb, "T4. N02 Treatment Patterns", rows = note_row, heights = 120)
   }
 }
 

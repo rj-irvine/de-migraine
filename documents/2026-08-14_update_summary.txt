@@ -3,6 +3,15 @@ Update summary - 14 August 2026
 Prepared by Ryan Irvine (CDS) for Paula Chu (OR)
 
 
+TWO TERMS USED THROUGHOUT
+
+- Persistence: how long a patient stays on treatment before stopping or
+  switching to something else.
+- Adherence: whether a patient keeps taking the medication once started,
+  measured as the share of days over a fixed year on which they had
+  medication in hand.
+
+
 WHAT CHANGED
 
 - Adherence denominator corrected. Patients whose first painkiller
@@ -19,11 +28,11 @@ WHAT CHANGED
   fact that the two groups receive different drugs, and accounted for roughly
   60% of the apparent difference in treatment coverage between them.
 
-- Treatment length can now be reported. It previously came out as exactly 30
-  days for everyone with no variation at all, which was the filled-in value
-  showing through rather than a real finding. A first course of treatment now
-  runs 13 days in both groups, and two thirds of first courses consist of a
-  single prescription with nothing after it.
+- Persistence can now be reported. It previously came out as exactly 30 days
+  for everyone with no variation at all, which was the filled-in value showing
+  through rather than a real finding. A first course of treatment now runs 13
+  days in both groups, and two thirds of first courses consist of a single
+  prescription with nothing after it.
 
 - Two competing adherence measures reduced to one. Table 4 showed adherence
   measured over each patient's own treatment period alongside adherence
