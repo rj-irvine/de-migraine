@@ -379,7 +379,7 @@ if (file.exists("data/cov5")) {
               collapse = " and "),
         ", and those lines take the median observed duration for their own ATC",
         " code rather than a single flat value, so the differing drug mix",
-        " between the arms is carried through."
+        " between the two groups is carried through."
       )
     }
 
