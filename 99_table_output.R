@@ -327,7 +327,15 @@ style_objective_rows(wb, "T2. Outcome Variables", table2,
 # ---------------------------------------------------------------------------
 # Table 3. N02 Prescription Counts (DE-specific) ----
 # ---------------------------------------------------------------------------
+# Row labels arrive as bare codes ("N02CC01", "CGDE.04356"), which nobody
+# outside the programming team can read. Name them here rather than in 08/09:
+# 08_rx.R needs Snowflake and cannot be re-run, so doing it at write time keeps
+# both tables consistent and costs only a 99 run. See functions/atc_labels.R.
+rx_codelist_for_labels <- readRDS("data/rx_codelist")
+mol_lookup <- molecule_labels(rx_codelist_for_labels)
+
 cov4 <- readRDS("data/cov4") |>
+  mutate(name = label_atc_code(name)) |>
   rename(`Outcome Variable` = name, case = case, control = control)
 
 write_styled_table(
@@ -348,6 +356,7 @@ style_objective_rows(wb, "T3. N02 Prescriptions", cov4,
 # ---------------------------------------------------------------------------
 if (file.exists("data/cov5")) {
   cov5 <- readRDS("data/cov5") |>
+    mutate(name = label_molecule_code(label_atc_code(name), mol_lookup)) |>
     rename(`Outcome Variable` = name, case = case, control = control)
 
   write_styled_table(
@@ -464,7 +473,13 @@ addFilter(wb, "A1. Diagnosis Codelist",
 # ---------------------------------------------------------------------------
 # Appendix 2. N02 Prescription (ATC) Codelist ----
 # ---------------------------------------------------------------------------
-rx_cl <- readRDS("data/rx_codelist")
+# A substance column next to the code, so the appendix can be read without an
+# ATC reference to hand. Placed straight after the code it names.
+rx_cl <- readRDS("data/rx_codelist") |>
+  mutate(substance = setNames(atc_n02_labels$label,
+                              atc_n02_labels$code)[toupper(product_atc_code)]) |>
+  relocate(substance, .after = product_atc_code)
+
 write_styled_table(
   wb, "A2. N02 ATC Codelist",
   title = "Appendix 2. N02 (Analgesic) Prescription Products (ATC)",
