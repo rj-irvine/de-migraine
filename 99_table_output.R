@@ -34,7 +34,13 @@
 ################################################################################
 
 # Global ----
+# Builds the workbook from saved data/ objects only, so it does not need
+# Snowflake. DE_OFFLINE tells 00_global.R to skip the connection and the
+# codelist rebuild; removed straight afterwards so a later program in the same
+# session (runAll.R) still gets a live connection.
+DE_OFFLINE <- TRUE
 source("00_global.R")
+rm(DE_OFFLINE)
 
 # ---------------------------------------------------------------------------
 # Layout constants (match the UK deliverable) ----
@@ -232,7 +238,7 @@ toc <- data.frame(
     "Patient selection / attrition flow",
     "Continuous and discrete outcome measures (GP visits, demographics)",
     "N02 (analgesic) prescription counts & patterns, incl. N02C antimigraine",
-    "Treatment episodes, lines of therapy, and adherence (MPR/PDC)",
+    "Treatment episodes, lines of therapy, and adherence (fixed-window PDC)",
     "Distribution of annualized all-cause GP visits by cohort",
     "Codelist used to identify headache disorder patients (ICD-10)",
     "N02 (analgesic) products used for the prescription objective (ATC)"
@@ -256,8 +262,20 @@ write_styled_table(
 # ---------------------------------------------------------------------------
 # Table 1. Attrition Flow ----
 # ---------------------------------------------------------------------------
+# The attrition labels were built with StartDate (Dec 01 2016), inherited from
+# the UK study. The German extract does not go back that far: the earliest
+# record of any kind is Jan 2021, and no patient is indexed before then, so the
+# Dec 2016 cut-off excluded nobody and quoting it overstates the study period.
+# The counts are unaffected. 01_patpop_cohort1.R builds these labels and needs
+# Snowflake, so it cannot be re-run; the date is corrected here instead.
+DE_DATA_START <- as.Date("2021-01-01")
+
 table1_fmt <- readRDS("data/table1") |>
-  mutate(value = prettyNum(value, big.mark = ",")) |>
+  mutate(
+    label = gsub(format(StartDate, "%b %d %Y"),
+                 format(DE_DATA_START, "%b %d %Y"), label, fixed = TRUE),
+    value = prettyNum(value, big.mark = ",")
+  ) |>
   rename(Criteria = label, N = value)
 
 last1 <- write_styled_table(
@@ -273,14 +291,17 @@ last1 <- write_styled_table(
 foot_row <- last1 + 2
 writeData(
   wb, "T1. Attrition Flow",
-  paste0("Headache disorder and non-headache disorder patients are matched ",
-         "on: gender, care site, and year of birth (± 2 years)."),
+  paste0("Each headache patient is matched to one patient with no headache ",
+         "diagnosis, of the same sex, at the same practice, and born within ",
+         "two years of them.\n",
+         "The German data begins in January 2021, so everyone in this study ",
+         "is diagnosed and followed from that point onwards."),
   startRow = foot_row, startCol = COL0
 )
 mergeCells(wb, "T1. Attrition Flow", cols = COL0:(COL0 + 1), rows = foot_row)
 addStyle(wb, "T1. Attrition Flow", st_footnote, rows = foot_row,
          cols = COL0:(COL0 + 1), gridExpand = TRUE)
-setRowHeights(wb, "T1. Attrition Flow", rows = foot_row, heights = 28)
+setRowHeights(wb, "T1. Attrition Flow", rows = foot_row, heights = 48)
 
 # ---------------------------------------------------------------------------
 # Table 2. Outcome Variables (GP visits + demographics) ----
@@ -307,10 +328,28 @@ style_objective_rows(wb, "T2. Outcome Variables", table2,
 # ---------------------------------------------------------------------------
 # Table 3. N02 Prescription Counts (DE-specific) ----
 # ---------------------------------------------------------------------------
+# Row labels arrive as bare codes ("N02CC01", "CGDE.04356"), which nobody
+# outside the programming team can read. Name them here rather than in 08/09:
+# 08_rx.R needs Snowflake and cannot be re-run, so doing it at write time keeps
+# both tables consistent and costs only a 99 run. See functions/atc_labels.R.
+rx_codelist_for_labels <- readRDS("data/rx_codelist")
+mol_lookup <- molecule_labels(rx_codelist_for_labels)
+
 cov4 <- readRDS("data/cov4") |>
+  mutate(
+    name = label_atc_code(name),
+    # Controls have no headache index - they are measured from their matched
+    # patient's diagnosis date, which is the right comparator but is not what
+    # "headache index" says of that column. 08_rx.R builds this label and needs
+    # Snowflake, so it is corrected here. The footnote below says whose date it
+    # is in each column.
+    name = gsub("Time from headache index to first N02 prescription (days)",
+                "Time from index date to first N02 prescription (days)",
+                name, fixed = TRUE)
+  ) |>
   rename(`Outcome Variable` = name, case = case, control = control)
 
-write_styled_table(
+last3 <- write_styled_table(
   wb, "T3. N02 Prescriptions",
   title = "Table 3. N02 (Analgesic) Prescription & Treatment Patterns, incl. N02C Antimigraine",
   df = cov4,
@@ -322,12 +361,32 @@ write_styled_table(
 style_objective_rows(wb, "T3. N02 Prescriptions", cov4,
                      value_cols = c("case", "control"), first_data_row = fd2)
 
+# Index-date footnote, so the reader knows the two columns are measured from
+# the same day rather than from something specific to each patient.
+foot3 <- last3 + 2
+writeData(
+  wb, "T3. N02 Prescriptions",
+  paste0("The index date is the day a patient was first diagnosed with a ",
+         "headache disorder.\n",
+         "Matched patients have no such diagnosis, so they are measured from ",
+         "the diagnosis date of the headache patient they are matched to. ",
+         "This keeps both columns covering the same stretch of time.\n",
+         "For matched patients, these rows describe whatever they were being ",
+         "treated for, not headache."),
+  startRow = foot3, startCol = COL0
+)
+mergeCells(wb, "T3. N02 Prescriptions", cols = COL0:(COL0 + 2), rows = foot3)
+addStyle(wb, "T3. N02 Prescriptions", st_footnote, rows = foot3,
+         cols = COL0:(COL0 + 2), gridExpand = TRUE)
+setRowHeights(wb, "T3. N02 Prescriptions", rows = foot3, heights = 62)
+
 # ---------------------------------------------------------------------------
 # Table 4. N02 Treatment Patterns (episodes, lines of therapy, adherence) ----
 # Produced by 09_rx_patterns.R; guarded so 99 still runs if 09 hasn't run.
 # ---------------------------------------------------------------------------
 if (file.exists("data/cov5")) {
   cov5 <- readRDS("data/cov5") |>
+    mutate(name = label_molecule_code(label_atc_code(name), mol_lookup)) |>
     rename(`Outcome Variable` = name, case = case, control = control)
 
   write_styled_table(
@@ -342,22 +401,53 @@ if (file.exists("data/cov5")) {
   style_objective_rows(wb, "T4. N02 Treatment Patterns", cov5,
                        value_cols = c("case", "control"), first_data_row = fd2)
 
-  # Days-supply methods note.
+  # Days-supply methods note. Every row below the lines-of-therapy block is
+  # measured in days, so the reader needs to know where those days came from.
   if (file.exists("data/rx_daysupply_diag")) {
     diag <- readRDS("data/rx_daysupply_diag")
+
+    imputed_txt <- ""
+    if (file.exists("data/rx_daysupply_source")) {
+      src <- readRDS("data/rx_daysupply_source")
+      friendly <- c(case = "headache patients", control = "matched patients")
+      pct_imp <- src |>
+        group_by(cohort) |>
+        summarise(pct = round(sum(pct[source != "observed"]), 0), .groups = "drop")
+      imputed_txt <- paste0(
+        " Where it is missing (",
+        paste(paste0(pct_imp$pct, "% for ",
+                     ifelse(pct_imp$cohort %in% names(friendly),
+                            friendly[pct_imp$cohort], pct_imp$cohort)),
+              collapse = ", "),
+        ") we use the typical length recorded for that same drug."
+      )
+    }
+
     note_row <- ROW0 + 3 + nrow(cov5) + 2
     writeData(
       wb, "T4. N02 Treatment Patterns",
-      paste0("Days-supply based on prescription duration (median = ",
-             round(diag$duration_median, 0),
-             " days; missing set to 30d), with a 30-day grace period."),
+      paste0(
+        "Persistence means how long a patient stays on treatment before ",
+        "stopping or switching. A course counts as ended once a patient goes ",
+        "more than a month without medication. Adherence means whether they ",
+        "keep taking it, measured as the share of days in the year they had ",
+        "medication in hand - the proportion of days covered rows below.\n",
+        "Both need to know how long each prescription was meant to last. That ",
+        "is recorded on about a quarter of prescriptions, typically ",
+        round(diag$duration_median, 0), " days.",
+        imputed_txt, "\n",
+        "Read the persistence and coverage rows with care. Migraine-specific ",
+        "drugs are taken when an attack starts rather than every day, and are ",
+        "almost never given a set length (about 3% of the time), so a measure ",
+        "based on days covered does not describe them well."
+      ),
       startRow = note_row, startCol = COL0
     )
     mergeCells(wb, "T4. N02 Treatment Patterns",
                cols = COL0:(COL0 + 2), rows = note_row)
     addStyle(wb, "T4. N02 Treatment Patterns", st_footnote,
              rows = note_row, cols = COL0:(COL0 + 2), gridExpand = TRUE)
-    setRowHeights(wb, "T4. N02 Treatment Patterns", rows = note_row, heights = 40)
+    setRowHeights(wb, "T4. N02 Treatment Patterns", rows = note_row, heights = 132)
   }
 }
 
@@ -414,7 +504,13 @@ addFilter(wb, "A1. Diagnosis Codelist",
 # ---------------------------------------------------------------------------
 # Appendix 2. N02 Prescription (ATC) Codelist ----
 # ---------------------------------------------------------------------------
-rx_cl <- readRDS("data/rx_codelist")
+# A substance column next to the code, so the appendix can be read without an
+# ATC reference to hand. Placed straight after the code it names.
+rx_cl <- readRDS("data/rx_codelist") |>
+  mutate(substance = setNames(atc_n02_labels$label,
+                              atc_n02_labels$code)[toupper(product_atc_code)]) |>
+  relocate(substance, .after = product_atc_code)
+
 write_styled_table(
   wb, "A2. N02 ATC Codelist",
   title = "Appendix 2. N02 (Analgesic) Prescription Products (ATC)",

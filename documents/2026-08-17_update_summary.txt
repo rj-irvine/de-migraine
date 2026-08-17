@@ -1,0 +1,71 @@
+DE MIGRAINE / HEADACHE STUDY (25P01)
+Update summary - 17 August 2026
+Ryan Irvine (CDS) for Paula Chu (OR)
+
+
+TWO TERMS
+
+- Persistence: how long a patient stays on treatment before stopping or
+  switching.
+- Adherence: whether they keep taking it, measured as the share of days in a
+  year they had medication in hand.
+
+
+WHAT CHANGED
+
+- Adherence corrected. Patients who started treatment late were being dropped
+  instead of counted as untreated. They were 55% of the matched group against
+  38% of headache patients, which made the matched group look more adherent.
+
+- Prescription length now estimated drug by drug. Only a quarter of
+  prescriptions record how long to take the medication. Missing ones used a
+  flat 30 days; they now use the typical length for that same drug. The flat
+  value accounted for roughly 60% of the apparent difference between groups.
+
+- Persistence can now be reported. It was previously exactly 30 days for
+  everyone, which was the filled-in value rather than a finding. It is now 13
+  days in both groups, and two thirds of first courses are a single
+  prescription.
+
+- One adherence measure instead of two. The old one gave a perfect score to
+  anyone with a single prescription. Removed.
+
+- Study period corrected to January 2021, from December 2016 carried over
+  from the UK study. Patient counts unaffected.
+
+- Presentation: tables now show drug names rather than codes, and footnotes
+  are rewritten in plain language.
+
+
+WHAT IT MEANS
+
+- Main findings unchanged. Headache patients receive far more painkillers,
+  more of it migraine-specific, average 3.3 courses of treatment against 1.9,
+  and a third work through four or more drugs against 18%. These held under
+  every alternative assumption we tested.
+
+- Adherence should not be presented as a finding. On equal terms it is 1.6%
+  for headache patients and 1.9% for the matched group. That is not poor
+  adherence. It is a measure built for daily medication applied to drugs taken
+  only when an attack starts, which is also why migraine-specific drugs carry
+  a treatment duration on just 3% of prescriptions.
+
+
+FOR DISCUSSION
+
+- Should persistence, adherence and lines of therapy be reported for the
+  matched group at all? The comparison is useful, but the wording implies
+  those patients are being treated for headache when they are not.
+
+
+KNOWN LIMITS
+
+- Over-the-counter painkillers are not captured, so real use is higher than
+  any figure here.
+- The quantity field is unusable, so total volume dispensed is not reported.
+
+
+FILES
+
+- results/DE_Migraine_Headache_Results.xlsx
+- documents/DE_Migraine_Treatment_Patterns_Summary.pptx

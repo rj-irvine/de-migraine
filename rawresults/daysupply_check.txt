@@ -1,0 +1,298 @@
+
+> cat("Days-supply validation for 09_rx_patterns.R\n")
+Days-supply validation for 09_rx_patterns.R
+
+> cat("Run:", format(Sys.time(), "%Y-%m-%d %H:%M"), "\n")
+Run: 2026-08-13 11:42 
+
+> cat(strrep("=", 78), "\n")
+============================================================================== 
+
+> # ===========================================================================
+> # A. Is `duration` expressed in days? ----
+> # If it is, the common  .... [TRUNCATED] 
+
+
+A. IS `duration` IN DAYS?
+
+> cat(strrep("-", 78), "\n")
+------------------------------------------------------------------------------ 
+
+> dur <- suppressWarnings(as.numeric(rx_obs$duration))
+
+> out$duration_quantiles <- q_row(dur[!is.na(dur) & dur > 0], "duration (valid only)")
+
+> show(out$duration_quantiles, "Distribution of usable duration values")
+
+Distribution of usable duration values
+               measure      n min p05 p25 median p75 p95 max
+ duration (valid only) 252599   1   2  12     25  50 100 365
+
+> out$duration_top_values <- rx_obs |>
++   mutate(duration_num = suppressWarnings(as.numeric(duration))) |>
++   filter(!is.na(duration_num) & duration .... [TRUNCATED] 
+
+> show(out$duration_top_values, "25 most common duration values")
+
+25 most common duration values
+ duration_num n_lines pct_of_valid cumulative_pct
+           50   58388        23.11          23.11
+           25   28097        11.12          34.24
+           17   22816         9.03          43.27
+          100   21064         8.34          51.61
+           13   17867         7.07          58.68
+           34   16119         6.38          65.06
+           10   15505         6.14          71.20
+            7   11030         4.37          75.57
+            1    8781         3.48          79.05
+           20    6761         2.68          81.72
+            2    5791         2.29          84.01
+            9    5244         2.08          86.09
+           12    4267         1.69          87.78
+            5    4118         1.63          89.41
+           67    3004         1.19          90.60
+            3    2361         0.93          91.53
+            4    2239         0.89          92.42
+           15    2058         0.81          93.23
+            6    1987         0.79          94.02
+            8    1975         0.78          94.80
+           28    1719         0.68          95.48
+           56    1420         0.56          96.05
+           49    1376         0.54          96.59
+           30    1280         0.51          97.10
+          200     980         0.39          97.49
+
+> # Pack count is the obvious confounder: if duration really means packs, it
+> # should track `box` almost exactly.
+> out$duration_by_box <- rx_obs |> .... [TRUNCATED] 
+
+> show(out$duration_by_box, "Median duration by number of boxes dispensed")
+
+Median duration by number of boxes dispensed
+ box_num n_lines median_duration    p25    p75
+       1  236469            25.0  12.00  50.00
+       2   14459            34.0  20.00  50.00
+       3    1098            38.0  25.00  50.00
+       4     411            50.0  27.00  67.00
+       5      78            31.0  30.00  50.00
+       6      65            38.0  36.00  38.00
+       7       2           204.5 131.75 277.25
+       8       2            83.5  75.25  91.75
+      10      10            63.0  63.00  63.00
+      12       1           300.0 300.00 300.00
+      21       2           126.0 126.00 126.00
+      22       2           138.0 138.00 138.00
+
+> out$duration_by_frequency <- rx_obs |>
++   mutate(duration_num = suppressWarnings(as.numeric(duration))) |>
++   group_by(frequency_code) |>
++   summ .... [TRUNCATED] 
+
+> show(out$duration_by_frequency, "Duration by frequency_code (most common codes)")
+
+Duration by frequency_code (most common codes)
+ frequency_code n_lines pct_missing_duration median_duration
+           <NA>  809746                100.0              NA
+              J  253300                  0.3              25
+
+> # ===========================================================================
+> # B. How much of the coverage is substituted rather than observed? - .... [TRUNCATED] 
+
+
+B. HOW MUCH IS SUBSTITUTED?
+
+> cat(strrep("-", 78), "\n")
+------------------------------------------------------------------------------ 
+
+> rx <- rx_obs |>
++   mutate(
++     event_date = as.Date(event_date),
++     duration_num = suppressWarnings(as.numeric(duration)),
++     imputed = is. .... [TRUNCATED] 
+
+> out$imputed_lines <- rx |>
++   group_by(cohort) |>
++   summarise(n_lines = n(),
++             n_imputed = sum(imputed),
++             pct_imputed =  .... [TRUNCATED] 
+
+> show(out$imputed_lines, "Prescription lines with no usable duration")
+
+Prescription lines with no usable duration
+  cohort n_lines n_imputed pct_imputed
+    case  850431    666425        78.4
+ control  212615    144022        67.7
+
+> out$imputed_patients <- rx |>
++   group_by(cohort, person_id) |>
++   summarise(all_imputed = all(imputed), any_imputed = any(imputed),
++             .... [TRUNCATED] 
+
+> show(out$imputed_patients, "Patients affected by substitution")
+
+Patients affected by substitution
+  cohort n_patients pct_any_imputed pct_all_imputed
+    case     123330            87.2            65.1
+ control      44471            78.9            61.0
+
+> # ===========================================================================
+> # C. Why is first-episode duration flat at 30 days? ----
+> # Two can .... [TRUNCATED] 
+
+
+C. WHY IS FIRST-EPISODE DURATION FLAT?
+
+> cat(strrep("-", 78), "\n")
+------------------------------------------------------------------------------ 
+
+> episodes_lines <- rx |>
++   group_by(cohort, person_id) |>
++   mutate(
++     prev_cov_end = lag(cummax(as.numeric(cov_end))),
++     prev_cov_end = a .... [TRUNCATED] 
+
+> first_ep <- episodes_lines |>
++   group_by(cohort, person_id, episode_id) |>
++   summarise(episode_start = min(event_date),
++             episode_du .... [TRUNCATED] 
+
+> out$first_episode_size <- first_ep |>
++   mutate(fills = ifelse(n_rx >= 4, "4+", as.character(n_rx))) |>
++   count(cohort, fills, name = "n_patients ..." ... [TRUNCATED] 
+
+> show(out$first_episode_size, "Prescriptions in the first episode")
+
+Prescriptions in the first episode
+  cohort fills n_patients  pct
+    case     1      81324 65.9
+    case     2      25278 20.5
+    case     3       5063  4.1
+    case    4+      11665  9.5
+ control     1      29964 67.4
+ control     2       8401 18.9
+ control     3       1695  3.8
+ control    4+       4411  9.9
+
+> out$first_episode_duration <- bind_rows(
++   first_ep |> group_by(cohort) |>
++     group_modify(~ q_row(.x$episode_duration_days, "all patients")),
+ .... [TRUNCATED] 
+
+> show(out$first_episode_duration, "First-episode duration by subgroup")
+
+First-episode duration by subgroup
+  cohort               measure      n min p05 p25 median p75   p95  max
+    case          all patients 123330   1   7  30     30  30 153.0 1923
+ control          all patients  44471   1   7  30     30  30 172.0 1815
+    case  single-fill episodes  81324   1   7  30     30  30  30.0  365
+ control  single-fill episodes  29964   1   5  30     30  30  30.0  200
+    case      2+ fill episodes  42006   1  17  30     44  87 543.5 1923
+ control      2+ fill episodes  14507   1  13  30     44  96 569.0 1815
+    case any observed duration  29922   1   1   9     20  50 497.0 1923
+ control any observed duration  14393   1   1  10     20  50 428.0 1815
+    case    2+ fills, observed  13297   1   7  30     50 143 941.2 1923
+ control    2+ fills, observed   6280   1   7  30     51 155 795.0 1815
+
+> # ===========================================================================
+> # D. How far do the headline numbers move with the substituted value .... [TRUNCATED] 
+
+
+D. SENSITIVITY TO THE SUBSTITUTED VALUE
+
+> cat(strrep("-", 78), "\n")
+------------------------------------------------------------------------------ 
+
+> cat("Each row re-runs episode construction and fixed-window PDC end to end.\n")
+Each row re-runs episode construction and fixed-window PDC end to end.
+
+> run_scenario <- function(fallback, label, drop_imputed = FALSE) {
++   d <- rx
++   if (drop_imputed) {
++     d <- d |> filter(!imputed)
++   } else {
+ .... [TRUNCATED] 
+
+> scenarios <- lapply(FALLBACKS, function(f) {
++   message("  scenario: ", f, "-day substitution")
++   run_scenario(f, paste0(f, "-day substitution")) .... [TRUNCATED] 
+
+> message("  scenario: observed durations only")
+
+> scenarios[[length(scenarios) + 1]] <- run_scenario(NA, "observed only",
++                                                    drop_imputed = TRUE)
+
+> out$sensitivity <- bind_rows(scenarios) |>
++   select(scenario, cohort, n_patients, median_episodes,
++          median_first_duration, iqr_first_dur .... [TRUNCATED] 
+
+> show(out$sensitivity, "Headline measures under each assumption")
+
+Headline measures under each assumption
+            scenario  cohort n_patients median_episodes median_first_duration iqr_first_duration mean_pdc pct_adherent
+  7-day substitution    case     123330               2                     7                  2    0.049         0.61
+  7-day substitution control      44471               1                     7                  6    0.040         0.76
+ 14-day substitution    case     123330               2                    14                  0    0.073         0.71
+ 14-day substitution control      44471               1                    14                  3    0.054         0.84
+ 28-day substitution    case     123330               2                    28                  0    0.115         1.37
+ 28-day substitution control      44471               1                    28                  0    0.077         1.39
+ 30-day substitution    case     123330               2                    30                  0    0.120         1.52
+ 30-day substitution control      44471               1                    30                  0    0.080         1.50
+ 60-day substitution    case     123330               2                    60                  0    0.187         4.13
+ 60-day substitution control      44471               1                    60                  0    0.116         3.11
+       observed only    case      43079               1                    17                 31    0.069         1.69
+       observed only control      17360               1                    17                 41    0.066         1.86
+
+> cat("\nThe 30-day substitution row is what the workbook and the deck report.\n")
+
+The 30-day substitution row is what the workbook and the deck report.
+
+> # ===========================================================================
+> # E. Is there a better field in rx_detail_raw? ----
+> # 08_rx.R pull .... [TRUNCATED] 
+
+
+E. ALTERNATIVE SOURCE (rx_detail_raw)
+
+> cat(strrep("-", 78), "\n")
+------------------------------------------------------------------------------ 
+
+> if (file.exists("data/rx_detail_raw")) {
++   detail <- readRDS("data/rx_detail_raw")
++   cat("rx_detail_raw found:", nrow(detail), "rows\n")
++   cat .... [TRUNCATED] 
+rx_detail_raw found: 8401829 rows
+Columns: contact_id, product_id, diagnostic_code, num_sequence, treatment_code, dose_1, dose_2, product_dose_unit_code, frequency_type_code, frequency_1, frequency_2, frequency_code, duration_min, duration_max, renewal, prescription_flag, dci_flag, prevention_flag, specialist_code, product_init_date, person_id, event_date 
+
+Completeness of each column
+                 column pct_populated
+             contact_id         100.0
+             product_id         100.0
+        diagnostic_code           0.0
+           num_sequence         100.0
+         treatment_code           0.0
+                 dose_1           0.0
+                 dose_2           0.0
+ product_dose_unit_code          99.7
+    frequency_type_code           0.0
+            frequency_1           0.0
+            frequency_2           0.0
+         frequency_code           0.0
+           duration_min           0.0
+           duration_max           0.0
+                renewal           0.0
+      prescription_flag         100.0
+               dci_flag         100.0
+        prevention_flag         100.0
+        specialist_code           0.0
+      product_init_date           0.0
+              person_id         100.0
+             event_date         100.0
+
+> cat("\n", strrep("=", 78), "\n")
+
+ ============================================================================== 
+
+> cat("End of report.\n")
+End of report.
+
+> sink()

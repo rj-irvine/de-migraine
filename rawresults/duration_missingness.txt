@@ -1,0 +1,313 @@
+
+> cat("Which N02 prescriptions carry a duration, and does it matter?\n")
+Which N02 prescriptions carry a duration, and does it matter?
+
+> cat("Run:", format(Sys.time(), "%Y-%m-%d %H:%M"), "\n")
+Run: 2026-08-13 13:00 
+
+> cat(strrep("=", 78), "\n")
+============================================================================== 
+
+> rx <- rx_obs |>
++   mutate(
++     event_date = as.Date(event_date),
++     duration_num = suppressWarnings(as.numeric(duration)),
++     quantity_num  .... [TRUNCATED] 
+
+> # ===========================================================================
+> # A. Can the missing values be derived from quantity instead? ----
+> .... [TRUNCATED] 
+
+
+A. IS `quantity` USABLE WHERE `duration` IS MISSING?
+
+> cat(strrep("-", 78), "\n")
+------------------------------------------------------------------------------ 
+
+> out$quantity_by_observed <- rx |>
++   group_by(duration_recorded = observed) |>
++   summarise(
++     n_lines = n(),
++     pct_quantity_missing = rou .... [TRUNCATED] 
+
+> show(out$quantity_by_observed, "Quantity, split by whether a duration was recorded")
+
+Quantity, split by whether a duration was recorded
+ duration_recorded n_lines pct_quantity_missing pct_quantity_zero pct_quantity_usable q_p25 q_median q_p75   q_max
+             FALSE  810447                 99.9                 0                 0.1     2        2     4     100
+              TRUE  252599                  0.0                 0               100.0     2        2     3 9391924
+
+> cat("\nIf the FALSE row shows a usable quantity, a dose assumption could derive\n")
+
+If the FALSE row shows a usable quantity, a dose assumption could derive
+
+> cat("the missing days supply. If it is mostly zero/missing, this route is shut.\n")
+the missing days supply. If it is mostly zero/missing, this route is shut.
+
+> # ===========================================================================
+> # B. What predicts a duration being recorded? ----
+> # ============= .... [TRUNCATED] 
+
+
+B. WHAT PREDICTS A DURATION BEING RECORDED?
+
+> cat(strrep("-", 78), "\n")
+------------------------------------------------------------------------------ 
+
+> out$observed_by_cohort <- rx |>
++   group_by(cohort) |>
++   summarise(n_lines = n(), pct_observed = round(100 * mean(observed), 1),
++             .g .... [TRUNCATED] 
+
+> show(out$observed_by_cohort, "By cohort")
+
+By cohort
+  cohort n_lines pct_observed
+    case  850431         21.6
+ control  212615         32.3
+
+> out$observed_by_subgroup <- rx |>
++   group_by(cohort, atc_subgroup) |>
++   summarise(n_lines = n(), pct_observed = round(100 * mean(observed), 1),
+ .... [TRUNCATED] 
+
+> show(out$observed_by_subgroup, "By ATC subgroup and cohort")
+
+By ATC subgroup and cohort
+  cohort atc_subgroup n_lines pct_observed median_observed_duration
+    case         N02A  178881         35.2                       34
+ control         N02A   68911         36.2                       50
+    case         N02B  400054         28.0                       17
+ control         N02B  142776         30.5                       17
+    case         N02C  271496          3.3                       12
+ control         N02C     928          5.5                       12
+
+> cat("\nIf recording rates differ sharply by drug class, the case/control gap in\n")
+
+If recording rates differ sharply by drug class, the case/control gap in
+
+> cat("missingness is drug mix rather than anything about the patients.\n")
+missingness is drug mix rather than anything about the patients.
+
+> out$observed_by_atc <- rx |>
++   group_by(product_atc_code) |>
++   summarise(n_lines = n(), pct_observed = round(100 * mean(observed), 1),
++         .... [TRUNCATED] 
+
+> show(out$observed_by_atc, "15 most prescribed ATC codes")
+
+15 most prescribed ATC codes
+ product_atc_code n_lines pct_observed median_observed_duration
+          N02BB02  413740         24.2                       13
+          N02CC01  130572          3.8                       12
+          N02AX51   81201         47.4                       50
+          N02BF02   70276         50.4                       50
+          N02CC04   55984          3.0                       18
+          N02AA08   37581         21.3                        2
+          N02CC03   36652          2.4                       12
+          N02AX02   34665         34.5                       50
+          N02BF01   25407         48.4                       67
+          N02BE01   21899         23.8                        7
+          N02CC02   19454          3.2                       12
+          N02CD01   14873          2.0                        1
+          N02AJ06   13933         15.9                       10
+          N02AA05   13498         39.6                       50
+          N02AB03   13107          2.7                       10
+
+> out$observed_by_year <- rx |>
++   group_by(year) |>
++   summarise(n_lines = n(), pct_observed = round(100 * mean(observed), 1),
++             .group .... [TRUNCATED] 
+
+> show(out$observed_by_year, "By calendar year")
+
+By calendar year
+ year n_lines pct_observed
+ 2021   69176         16.1
+ 2022  213970         19.8
+ 2023  305987         24.1
+ 2024  306199         27.0
+ 2025  167714         25.4
+
+> fills <- rx |>
++   group_by(cohort, person_id) |>
++   summarise(n_fills = n(), .groups = "drop") |>
++   mutate(fill_band = cut(n_fills, c(0, 1, 2, 4 .... [TRUNCATED] 
+
+> out$observed_by_fills <- rx |>
++   left_join(fills, by = c("cohort", "person_id")) |>
++   group_by(fill_band) |>
++   summarise(n_lines = n(), pct_ob .... [TRUNCATED] 
+
+> show(out$observed_by_fills, "By how many N02 lines the patient has")
+
+By how many N02 lines the patient has
+ fill_band n_lines pct_observed
+         1   55524         25.0
+         2   62816         25.5
+       3-4   95232         24.1
+       5-9  163912         22.5
+       10+  685562         23.8
+
+> # ===========================================================================
+> # C. Is recording a practice-level habit? ----
+> # A U-shaped distri .... [TRUNCATED] 
+
+
+C. IS RECORDING A PRACTICE-LEVEL HABIT?
+
+> cat(strrep("-", 78), "\n")
+------------------------------------------------------------------------------ 
+
+> if ("provider_id" %in% names(rx)) {
++   prov <- rx |>
++     filter(!is.na(provider_id)) |>
++     group_by(provider_id) |>
++     summarise(n_lines =  .... [TRUNCATED] 
+
+Providers with 10+ lines (n = 1559), by share recorded
+       band n_providers pct_of_providers
+ 0% (never)         149              9.6
+      0-10%         362             23.2
+     10-25%         470             30.1
+     25-50%         453             29.1
+     50-75%         114              7.3
+     75-90%          10              0.6
+    90-100%           1              0.1
+
+Weight piled at the two ends means it is a recording habit, not a
+property of individual prescriptions.
+
+> # ===========================================================================
+> # D. Within-patient comparison ----
+> # Patients holding both kinds  .... [TRUNCATED] 
+
+
+D. WITHIN PATIENTS WHO HAVE BOTH KINDS OF LINE
+
+> cat(strrep("-", 78), "\n")
+------------------------------------------------------------------------------ 
+
+> mixed <- rx |>
++   group_by(cohort, person_id) |>
++   filter(any(observed) & any(!observed)) |>
++   ungroup()
+
+> out$mixed_patients <- mixed |>
++   distinct(cohort, person_id) |>
++   count(cohort, name = "n_patients")
+
+> show(out$mixed_patients, "Patients with both recorded and unrecorded lines")
+
+Patients with both recorded and unrecorded lines
+  cohort n_patients
+    case      27282
+ control       7957
+
+> if (nrow(mixed)) {
++   out$within_patient_subgroup <- mixed |>
++     group_by(observed, atc_subgroup) |>
++     summarise(n_lines = n(), .groups = "d ..." ... [TRUNCATED] 
+
+Drug mix, recorded vs unrecorded lines
+ observed atc_subgroup n_lines  pct
+    FALSE         N02A   70580 26.3
+     TRUE         N02A   68587 37.9
+    FALSE         N02B  145114 54.1
+     TRUE         N02B  105871 58.5
+    FALSE         N02C   52586 19.6
+     TRUE         N02C    6656  3.7
+
+Similar percentages down each drug class means recording is close to
+arbitrary within a patient, which is the best case for generalising.
+
+> # ===========================================================================
+> # E. Does a drug-specific substitution beat the flat 30 days? ----
+> .... [TRUNCATED] 
+
+
+E. DRUG-SPECIFIC SUBSTITUTION vs THE FLAT 30 DAYS
+
+> cat(strrep("-", 78), "\n")
+------------------------------------------------------------------------------ 
+
+> atc_lookup <- rx |>
++   filter(observed) |>
++   group_by(product_atc_code) |>
++   summarise(n_observed = n(), atc_median = median(duration_num), .gr .... [TRUNCATED] 
+
+> global_median <- median(rx$duration_num[rx$observed])
+
+> saveRDS(atc_lookup, "data/atc_duration_lookup")
+
+> cat("ATC codes with >=", MIN_ATC_OBS, "observed durations:", nrow(atc_lookup), "\n")
+ATC codes with >= 50 observed durations: 31 
+
+> cat("Global median observed duration:", global_median, "days\n")
+Global median observed duration: 25 days
+
+> rx_imp <- rx |>
++   left_join(atc_lookup, by = "product_atc_code") |>
++   mutate(
++     source = case_when(observed ~ "observed",
++                  .... [TRUNCATED] 
+
+> out$imputation_source <- rx_imp |>
++   group_by(cohort, source) |>
++   summarise(n_lines = n(), .groups = "drop") |>
++   group_by(cohort) |>
++   mut .... [TRUNCATED] 
+
+> show(out$imputation_source, "Where each line's days supply comes from")
+
+Where each line's days supply comes from
+  cohort        source n_lines  pct
+    case    ATC median  662652 77.9
+    case global median    3773  0.4
+    case      observed  184006 21.6
+ control    ATC median  143850 67.7
+ control global median     172  0.1
+ control      observed   68593 32.3
+
+> # Headline measures for a given days-supply column, reusing 09's logic.
+> headline <- function(d, label) {
++   d <- d |>
++     mutate(cov_end = even .... [TRUNCATED] 
+
+> message("  scenario: flat 30-day substitution")
+
+> flat <- headline(rx_imp |> mutate(day_supply = ifelse(observed, duration_num,
++                                                       DEFAULT_DAYS_S .... [TRUNCATED] 
+
+> message("  scenario: ATC-specific substitution")
+
+> atc <- headline(rx_imp |> mutate(day_supply = ds_atc), "ATC-specific median")
+
+> out$imputation_comparison <- bind_rows(flat, atc) |>
++   select(scenario, cohort, n_patients, median_first_duration,
++          iqr_first_duration,  .... [TRUNCATED] 
+
+> show(out$imputation_comparison, "Headline measures under each substitution")
+
+Headline measures under each substitution
+                scenario  cohort n_patients median_first_duration iqr_first_duration mean_pdc pct_adherent
+ flat 30 days (reported)    case     123330                    30                  0    0.120         1.52
+ flat 30 days (reported) control      44471                    30                  0    0.080         1.50
+     ATC-specific median    case     123330                    13                  6    0.081         1.56
+     ATC-specific median control      44471                    13                 19    0.066         1.88
+
+> cat("\nIf the case/control coverage gap narrows sharply under the ATC-specific\n")
+
+If the case/control coverage gap narrows sharply under the ATC-specific
+
+> cat("version, the gap in the reported numbers was drug mix, not treatment.\n")
+version, the gap in the reported numbers was drug mix, not treatment.
+
+> cat("\n", strrep("=", 78), "\n")
+
+ ============================================================================== 
+
+> cat("End of report.\n")
+End of report.
+
+> sink()
