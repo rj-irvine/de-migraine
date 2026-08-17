@@ -291,16 +291,17 @@ last1 <- write_styled_table(
 foot_row <- last1 + 2
 writeData(
   wb, "T1. Attrition Flow",
-  paste0("Headache disorder and non-headache disorder patients are matched ",
-         "on: gender, care site, and year of birth (± 2 years). The German ",
-         "data begins in January 2021, so all patients are diagnosed and ",
-         "followed from that point onwards."),
+  paste0("Each headache patient is matched to one patient with no headache ",
+         "diagnosis, of the same sex, at the same practice, and born within ",
+         "two years of them.\n",
+         "The German data begins in January 2021, so everyone in this study ",
+         "is diagnosed and followed from that point onwards."),
   startRow = foot_row, startCol = COL0
 )
 mergeCells(wb, "T1. Attrition Flow", cols = COL0:(COL0 + 1), rows = foot_row)
 addStyle(wb, "T1. Attrition Flow", st_footnote, rows = foot_row,
          cols = COL0:(COL0 + 1), gridExpand = TRUE)
-setRowHeights(wb, "T1. Attrition Flow", rows = foot_row, heights = 42)
+setRowHeights(wb, "T1. Attrition Flow", rows = foot_row, heights = 48)
 
 # ---------------------------------------------------------------------------
 # Table 2. Outcome Variables (GP visits + demographics) ----
@@ -365,18 +366,19 @@ style_objective_rows(wb, "T3. N02 Prescriptions", cov4,
 foot3 <- last3 + 2
 writeData(
   wb, "T3. N02 Prescriptions",
-  paste0("Index date is the patient's first headache disorder diagnosis. ",
-         "Matched patients have no such diagnosis and are measured from their ",
-         "matched headache patient's index date, so both columns cover the ",
-         "same window of time. Follow-up rows describe prescribing over that ",
-         "window and, for matched patients, relate to whatever they were being ",
-         "treated for rather than to headache."),
+  paste0("The index date is the day a patient was first diagnosed with a ",
+         "headache disorder.\n",
+         "Matched patients have no such diagnosis, so they are measured from ",
+         "the diagnosis date of the headache patient they are matched to. ",
+         "This keeps both columns covering the same stretch of time.\n",
+         "For matched patients, these rows describe whatever they were being ",
+         "treated for, not headache."),
   startRow = foot3, startCol = COL0
 )
 mergeCells(wb, "T3. N02 Prescriptions", cols = COL0:(COL0 + 2), rows = foot3)
 addStyle(wb, "T3. N02 Prescriptions", st_footnote, rows = foot3,
          cols = COL0:(COL0 + 2), gridExpand = TRUE)
-setRowHeights(wb, "T3. N02 Prescriptions", rows = foot3, heights = 56)
+setRowHeights(wb, "T3. N02 Prescriptions", rows = foot3, heights = 62)
 
 # ---------------------------------------------------------------------------
 # Table 4. N02 Treatment Patterns (episodes, lines of therapy, adherence) ----
@@ -407,16 +409,17 @@ if (file.exists("data/cov5")) {
     imputed_txt <- ""
     if (file.exists("data/rx_daysupply_source")) {
       src <- readRDS("data/rx_daysupply_source")
+      friendly <- c(case = "headache patients", control = "matched patients")
       pct_imp <- src |>
         group_by(cohort) |>
         summarise(pct = round(sum(pct[source != "observed"]), 0), .groups = "drop")
       imputed_txt <- paste0(
-        " It is absent on ",
-        paste(paste0(pct_imp$pct, "% of ", pct_imp$cohort, " lines"),
-              collapse = " and "),
-        ", and those lines take the median observed duration for their own ATC",
-        " code rather than a single flat value, so the differing drug mix",
-        " between the two groups is carried through."
+        " Where it is missing (",
+        paste(paste0(pct_imp$pct, "% for ",
+                     ifelse(pct_imp$cohort %in% names(friendly),
+                            friendly[pct_imp$cohort], pct_imp$cohort)),
+              collapse = ", "),
+        ") we use the typical length recorded for that same drug."
       )
     }
 
@@ -424,19 +427,19 @@ if (file.exists("data/cov5")) {
     writeData(
       wb, "T4. N02 Treatment Patterns",
       paste0(
-        "Persistence is how long a patient stays on treatment before stopping ",
-        "or switching. Adherence is whether they keep taking it once started, ",
-        "measured here as the proportion of days covered (PDC): the share of a ",
-        "fixed year on which the patient had medication in hand. ",
-        "Days supply comes from the prescription duration field, which is ",
-        "recorded in days (median = ", round(diag$duration_median, 0), ").",
-        imputed_txt,
-        " Episodes and lines of therapy use a 30-day grace period. The ",
-        "coverage-based rows (persistence and PDC) should be read with care ",
-        "for as-needed treatment: migraine-specific (N02C) drugs carry a ",
-        "duration on only about 3% of lines because they are taken at the ",
-        "onset of an attack rather than on a daily schedule, so a measure ",
-        "built on days covered does not describe them well."
+        "Persistence means how long a patient stays on treatment before ",
+        "stopping or switching. A course counts as ended once a patient goes ",
+        "more than a month without medication. Adherence means whether they ",
+        "keep taking it, measured as the share of days in the year they had ",
+        "medication in hand - the proportion of days covered rows below.\n",
+        "Both need to know how long each prescription was meant to last. That ",
+        "is recorded on about a quarter of prescriptions, typically ",
+        round(diag$duration_median, 0), " days.",
+        imputed_txt, "\n",
+        "Read the persistence and coverage rows with care. Migraine-specific ",
+        "drugs are taken when an attack starts rather than every day, and are ",
+        "almost never given a set length (about 3% of the time), so a measure ",
+        "based on days covered does not describe them well."
       ),
       startRow = note_row, startCol = COL0
     )
@@ -444,7 +447,7 @@ if (file.exists("data/cov5")) {
                cols = COL0:(COL0 + 2), rows = note_row)
     addStyle(wb, "T4. N02 Treatment Patterns", st_footnote,
              rows = note_row, cols = COL0:(COL0 + 2), gridExpand = TRUE)
-    setRowHeights(wb, "T4. N02 Treatment Patterns", rows = note_row, heights = 120)
+    setRowHeights(wb, "T4. N02 Treatment Patterns", rows = note_row, heights = 132)
   }
 }
 
