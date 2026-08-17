@@ -335,10 +335,20 @@ rx_codelist_for_labels <- readRDS("data/rx_codelist")
 mol_lookup <- molecule_labels(rx_codelist_for_labels)
 
 cov4 <- readRDS("data/cov4") |>
-  mutate(name = label_atc_code(name)) |>
+  mutate(
+    name = label_atc_code(name),
+    # Controls have no headache index - they are measured from their matched
+    # patient's diagnosis date, which is the right comparator but is not what
+    # "headache index" says of that column. 08_rx.R builds this label and needs
+    # Snowflake, so it is corrected here. The footnote below says whose date it
+    # is in each column.
+    name = gsub("Time from headache index to first N02 prescription (days)",
+                "Time from index date to first N02 prescription (days)",
+                name, fixed = TRUE)
+  ) |>
   rename(`Outcome Variable` = name, case = case, control = control)
 
-write_styled_table(
+last3 <- write_styled_table(
   wb, "T3. N02 Prescriptions",
   title = "Table 3. N02 (Analgesic) Prescription & Treatment Patterns, incl. N02C Antimigraine",
   df = cov4,
@@ -349,6 +359,24 @@ write_styled_table(
 )
 style_objective_rows(wb, "T3. N02 Prescriptions", cov4,
                      value_cols = c("case", "control"), first_data_row = fd2)
+
+# Index-date footnote, so the reader knows the two columns are measured from
+# the same day rather than from something specific to each patient.
+foot3 <- last3 + 2
+writeData(
+  wb, "T3. N02 Prescriptions",
+  paste0("Index date is the patient's first headache disorder diagnosis. ",
+         "Matched patients have no such diagnosis and are measured from their ",
+         "matched headache patient's index date, so both columns cover the ",
+         "same window of time. Follow-up rows describe prescribing over that ",
+         "window and, for matched patients, relate to whatever they were being ",
+         "treated for rather than to headache."),
+  startRow = foot3, startCol = COL0
+)
+mergeCells(wb, "T3. N02 Prescriptions", cols = COL0:(COL0 + 2), rows = foot3)
+addStyle(wb, "T3. N02 Prescriptions", st_footnote, rows = foot3,
+         cols = COL0:(COL0 + 2), gridExpand = TRUE)
+setRowHeights(wb, "T3. N02 Prescriptions", rows = foot3, heights = 56)
 
 # ---------------------------------------------------------------------------
 # Table 4. N02 Treatment Patterns (episodes, lines of therapy, adherence) ----
